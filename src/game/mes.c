@@ -661,7 +661,9 @@ int consume_next_char(TigFile* stream)
         }
     }
 
-    return mes_file_parse_buffer[mes_file_parse_pos++];
+    // Local fix: chars 0x80-0xFF (cp1251 Cyrillic, e.g. 0xFF) must not read as
+    // EOF (-1) through signed char. Original Windows engine accepted them.
+    return (unsigned char)mes_file_parse_buffer[mes_file_parse_pos++];
 }
 
 /**

@@ -2819,7 +2819,8 @@ int dialog_file_fclose(TigFile* stream)
 int dialog_file_fgetc(TigFile* stream)
 {
     if (dialog_file_tmp_str_pos != dialog_file_tmp_str_size) {
-        return dialog_file_tmp_str[dialog_file_tmp_str_pos++];
+        // Local fix: cp1251 bytes (0x80-0xFF) must not read as EOF via signed char.
+        return (unsigned char)dialog_file_tmp_str[dialog_file_tmp_str_pos++];
     }
 
     dialog_file_tmp_str_pos = 0;
@@ -2834,7 +2835,8 @@ int dialog_file_fgetc(TigFile* stream)
         return EOF;
     }
 
-    return dialog_file_tmp_str[dialog_file_tmp_str_pos++];
+    // Local fix: see above.
+    return (unsigned char)dialog_file_tmp_str[dialog_file_tmp_str_pos++];
 }
 
 // 0x417E00
