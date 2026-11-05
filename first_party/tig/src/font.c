@@ -12,6 +12,60 @@ static int sub_535850(TigVideoBuffer* video_buffer, const char* str, int length,
 static int sub_535C40(tig_art_id_t font_art_id, const char* str, int max_width, int* width_ptr);
 static bool tig_font_glyph_data(tig_art_id_t font_art_id, int ch, int* width_ptr, int* height_ptr, int* dx_ptr, int* dy_ptr);
 
+// UA-localization dev aid: text that does not fit its rect is silently
+// truncated here, which is invisible without eyeballing every screen.
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define OVERFLOW_SEEN_CAP 512
+
+static void tig_font_log_overflow(const char* reason, const char* str, const TigRect* rect, int glyph_height)
+{
+    static unsigned seen[OVERFLOW_SEEN_CAP];
+    static int seen_count = 0;
+    static FILE* fp = NULL;
+    static bool fp_failed = false;
+    unsigned h = 5381;
+    const unsigned char* p;
+    int i;
+
+    if (fp_failed || str == NULL) {
+        return;
+    }
+
+    for (p = (const unsigned char*)str; *p != '\0'; p++) {
+        h = h * 33 + *p;
+    }
+    h = h * 33 + (unsigned)rect->width;
+    h = h * 33 + (unsigned)rect->height;
+
+    for (i = 0; i < seen_count; i++) {
+        if (seen[i] == h) {
+            return;
+        }
+    }
+    if (seen_count >= OVERFLOW_SEEN_CAP) {
+        return;
+    }
+    seen[seen_count++] = h;
+
+    if (fp == NULL) {
+        const char* home = getenv("HOME");
+        char path[1024];
+        snprintf(path, sizeof(path), "%s/arcanum_overflow.log", home != NULL ? home : "/tmp");
+        fp = fopen(path, "a");
+        if (fp == NULL) {
+            fp_failed = true;
+            return;
+        }
+    }
+
+    fprintf(fp, "[%s] rect=%dx%d line_h=%d text=%.120s\n",
+        reason, rect->width, rect->height, glyph_height, str);
+    fflush(fp);
+}
+
 // 0x630CFC
 static int tig_font_stack_index;
 
@@ -280,6 +334,7 @@ int tig_font_write(TigVideoBuffer* video_buffer, const char* str, const TigRect*
             while (1) {
                 line_length = sub_535C40(tig_font_stack[tig_font_stack_index]->art_id, remainder, rect->width, &line_width);
                 if (line_length == -1) {
+                    tig_font_log_overflow("word_too_wide", remainder, rect, glyph_height);
                     break;
                 }
 
@@ -319,9 +374,12 @@ int tig_font_write(TigVideoBuffer* video_buffer, const char* str, const TigRect*
 
                 remainder += line_length + 1;
                 if (rect->y + rect->height - max_y < glyph_height) {
+                    tig_font_log_overflow("truncated", str, rect, glyph_height);
                     break;
                 }
             }
+        } else {
+            tig_font_log_overflow("no_room", str, rect, glyph_height);
         }
 
         shadow = false;
