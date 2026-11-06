@@ -126,7 +126,9 @@ static int dword_5B384C[OBJ_TYPE_COUNT] = {
     /*           OBJ_TYPE_KEY */ 12063,
     /*      OBJ_TYPE_KEY_RING */ 13062,
     /*       OBJ_TYPE_WRITTEN */ 14130,
-    /*       OBJ_TYPE_GENERIC */ 15213,
+    // UAP 2.x adds Educator's Guide as generic proto 15213; the Windows
+    // engine patcher extends this table the same way.
+    /*       OBJ_TYPE_GENERIC */ 15214,
     /*            OBJ_TYPE_PC */ 16079,
     /*           OBJ_TYPE_NPC */ 17317,
     /*          OBJ_TYPE_TRAP */ 26008,
