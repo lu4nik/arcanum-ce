@@ -38,6 +38,22 @@ static inline uint32_t blend(uint32_t dst, uint32_t src, int a /* 0..256, weight
     return rb | g | 0xFF000000u;
 }
 
+int tig_xbr_is_checker(const uint32_t* src, int src_pitch, int w, int h, int x, int y)
+{
+    if (x <= 0 || y <= 0 || x >= w - 1 || y >= h - 1) {
+        return 0;
+    }
+    const uint32_t* p = src + y * src_pitch + x;
+    uint32_t e_px = p[0] | 0xFF000000u;
+    uint32_t l = p[-1] | 0xFF000000u, rr = p[1] | 0xFF000000u;
+    uint32_t u = p[-src_pitch] | 0xFF000000u, dn = p[src_pitch] | 0xFF000000u;
+    uint32_t ul = p[-src_pitch - 1] | 0xFF000000u, ur = p[-src_pitch + 1] | 0xFF000000u;
+    uint32_t dl = p[src_pitch - 1] | 0xFF000000u, dr = p[src_pitch + 1] | 0xFF000000u;
+    int cross_same = (l == u) + (l == rr) + (l == dn);
+    int diag_same = (ul == e_px) + (ur == e_px) + (dl == e_px) + (dr == e_px);
+    return l != e_px && cross_same >= 2 && diag_same >= 3;
+}
+
 typedef struct Ctx {
     const uint32_t* src;
     int src_pitch;
@@ -71,17 +87,7 @@ static void process_row(const Ctx* c, int y)
 
         // Leave 1-pixel checkerboard dithering (the game's see-through walls
         // and shadows) as crisp blocks: edge rules turn it into a maze pattern.
-        int checker = 0;
-        if (x > 0 && y > 0 && x < c->w - 1 && y < c->h - 1) {
-            const uint32_t* p = c->src + y * c->src_pitch + x;
-            uint32_t l = p[-1] | 0xFF000000u, rr = p[1] | 0xFF000000u;
-            uint32_t u = p[-c->src_pitch] | 0xFF000000u, dn = p[c->src_pitch] | 0xFF000000u;
-            uint32_t ul = p[-c->src_pitch - 1] | 0xFF000000u, ur = p[-c->src_pitch + 1] | 0xFF000000u;
-            uint32_t dl = p[c->src_pitch - 1] | 0xFF000000u, dr = p[c->src_pitch + 1] | 0xFF000000u;
-            int cross_same = (l == u) + (l == rr) + (l == dn);
-            int diag_same = (ul == e_px) + (ur == e_px) + (dl == e_px) + (dr == e_px);
-            checker = l != e_px && cross_same >= 2 && diag_same >= 3;
-        }
+        int checker = tig_xbr_is_checker(c->src, c->src_pitch, c->w, c->h, x, y);
 
         for (int r = 0; r < 4 && !checker; r++) {
             const int (*m)[2] = rot[r];

@@ -307,6 +307,20 @@ static SDL_Texture* tig_video_smooth_frame(void)
     int dst_pitch = pitch / 4;
     if (tig_video_smooth == 2) {
         tig_xbrz3x(src, src_pitch, w, h, dst, dst_pitch);
+        // Checkerboard dithering (see-through walls) stays as crisp blocks.
+        for (int y = 1; y < h - 1; y++) {
+            for (int x = 1; x < w - 1; x++) {
+                if (tig_xbr_is_checker(src, src_pitch, w, h, x, y)) {
+                    uint32_t p = src[(size_t)y * src_pitch + x] | 0xFF000000u;
+                    for (int k = 0; k < 3; k++) {
+                        uint32_t* d = dst + (size_t)(y * 3 + k) * dst_pitch + x * 3;
+                        d[0] = p;
+                        d[1] = p;
+                        d[2] = p;
+                    }
+                }
+            }
+        }
     } else {
         tig_xbr3x(src, src_pitch, w, h, dst, dst_pitch);
     }
