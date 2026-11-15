@@ -90,6 +90,9 @@ typedef struct TigWindowModalDialogInfo {
 int tig_window_init(TigInitInfo* init_info);
 void tig_window_exit(void);
 int tig_window_create(TigWindowData* window_data, tig_window_handle_t* window_handle_ptr);
+// Local tweak: rects of visible windows drawn over a full-screen one (the UI
+// over the game world), topmost first. Returns the count.
+int tig_window_overlay_rects(int screen_width, int screen_height, TigRect* rects, int max);
 int tig_window_destroy(tig_window_handle_t window_handle);
 int tig_window_button_destroy(tig_window_handle_t window_handle);
 int tig_window_message_filter_set(tig_window_handle_t window_handle, TigWindowMessageFilterFunc func);

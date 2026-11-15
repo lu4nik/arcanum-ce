@@ -10,6 +10,7 @@
 #include "tig/draw.h"
 #include "tig/file.h"
 #include "tig/memory.h"
+#include "tig/window.h"
 #include "tig/xbr.h"
 #include "tig/message.h"
 #include "tig/mouse.h"
@@ -292,7 +293,34 @@ static SDL_Texture* tig_video_smooth_frame(void)
         tig_video_smooth = false;
         return NULL;
     }
-    tig_xbr3x((const uint32_t*)surface->pixels, surface->pitch / 4, w, h, (uint32_t*)pixels, pitch / 4);
+    const uint32_t* src = (const uint32_t*)surface->pixels;
+    int src_pitch = surface->pitch / 4;
+    uint32_t* dst = (uint32_t*)pixels;
+    int dst_pitch = pitch / 4;
+    tig_xbr3x(src, src_pitch, w, h, dst, dst_pitch);
+
+    // Keep the interface and its text crisp: plain 3x pixels over UI windows,
+    // only the game world underneath gets smoothed.
+    TigRect rects[64];
+    int num_rects = tig_window_overlay_rects(w, h, rects, 64);
+    for (int r = 0; r < num_rects; r++) {
+        int x0 = rects[r].x < 0 ? 0 : rects[r].x;
+        int y0 = rects[r].y < 0 ? 0 : rects[r].y;
+        int x1 = rects[r].x + rects[r].width > w ? w : rects[r].x + rects[r].width;
+        int y1 = rects[r].y + rects[r].height > h ? h : rects[r].y + rects[r].height;
+        for (int y = y0; y < y1; y++) {
+            const uint32_t* s = src + (size_t)y * src_pitch;
+            for (int k = 0; k < 3; k++) {
+                uint32_t* d = dst + (size_t)(y * 3 + k) * dst_pitch;
+                for (int x = x0; x < x1; x++) {
+                    uint32_t p = s[x] | 0xFF000000u;
+                    d[x * 3] = p;
+                    d[x * 3 + 1] = p;
+                    d[x * 3 + 2] = p;
+                }
+            }
+        }
+    }
     SDL_UnlockTexture(tig_video_smooth_texture);
 
     if (tig_video_smooth_prev_size != size) {

@@ -1822,3 +1822,30 @@ int tig_window_move(tig_window_handle_t window_handle, int x, int y)
 
     return TIG_OK;
 }
+
+// Local tweak: see window.h.
+int tig_window_overlay_rects(int screen_width, int screen_height, TigRect* rects, int max)
+{
+    int count = 0;
+
+    for (int index = tig_window_num_windows - 1; index >= 0; index--) {
+        TigWindow* win = &(windows[tig_window_handle_to_index(tig_window_stack[index])]);
+        if ((win->flags & TIG_WINDOW_HIDDEN) != 0) {
+            continue;
+        }
+
+        if (win->frame.x <= 0
+            && win->frame.y <= 0
+            && win->frame.x + win->frame.width >= screen_width
+            && win->frame.y + win->frame.height >= screen_height) {
+            // Full-screen window: everything below is hidden by it.
+            break;
+        }
+
+        if (count < max) {
+            rects[count++] = win->frame;
+        }
+    }
+
+    return count;
+}
