@@ -116,6 +116,8 @@ int tig_video_flip(void);
 // Local tweak: upscale filter mode: 0 = none, 1 = xBR (fast), 2 = xBRZ (slow).
 void tig_video_set_smooth(int mode);
 int tig_video_get_smooth(void);
+// Local tweak: false keeps UI windows (and their text) as crisp pixels.
+void tig_video_set_smooth_ui(bool enabled);
 int tig_video_screenshot_set_settings(TigVideoScreenshotSettings* settings);
 int tig_video_screenshot_make(void);
 int tig_video_get_palette(unsigned int* colors);

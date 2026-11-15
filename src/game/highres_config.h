@@ -14,6 +14,7 @@ typedef struct HighResConfig {
     bool logos;
     bool intro;
     int smooth; // Local tweak: upscale filter 0 off, 1 xBR, 2 xBRZ
+    bool smooth_ui; // Local tweak: also smooth UI windows and text
 
 } HighResConfig;
 

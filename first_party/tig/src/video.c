@@ -241,6 +241,12 @@ int tig_video_fill(const TigRect* rect, tig_color_t color)
 // Local tweak: optional xBR 3x upscale of the final frame.
 static int tig_video_smooth;
 static int tig_video_smooth_label_frames;
+static bool tig_video_smooth_ui = true;
+
+void tig_video_set_smooth_ui(bool enabled)
+{
+    tig_video_smooth_ui = enabled;
+}
 static SDL_Texture* tig_video_smooth_texture;
 static void* tig_video_smooth_prev;
 static size_t tig_video_smooth_prev_size;
@@ -308,7 +314,7 @@ static SDL_Texture* tig_video_smooth_frame(void)
     // Keep the interface and its text crisp: plain 3x pixels over UI windows,
     // only the game world underneath gets smoothed.
     TigRect rects[64];
-    int num_rects = tig_window_overlay_rects(w, h, rects, 64);
+    int num_rects = tig_video_smooth_ui ? 0 : tig_window_overlay_rects(w, h, rects, 64);
     for (int r = 0; r < num_rects; r++) {
         int x0 = rects[r].x < 0 ? 0 : rects[r].x;
         int y0 = rects[r].y < 0 ? 0 : rects[r].y;
