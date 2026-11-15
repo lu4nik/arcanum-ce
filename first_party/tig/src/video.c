@@ -10,6 +10,7 @@
 #include "tig/draw.h"
 #include "tig/file.h"
 #include "tig/memory.h"
+#include "tig/xbr.h"
 #include "tig/message.h"
 #include "tig/mouse.h"
 #include "tig/timer.h"
@@ -236,12 +237,89 @@ int tig_video_fill(const TigRect* rect, tig_color_t color)
 }
 
 // 0x51F8F0
+// Local tweak: optional xBR 3x upscale of the final frame.
+static bool tig_video_smooth;
+static SDL_Texture* tig_video_smooth_texture;
+static void* tig_video_smooth_prev;
+static size_t tig_video_smooth_prev_size;
+
+void tig_video_set_smooth(bool enabled)
+{
+    tig_video_smooth = enabled;
+    // Force a full re-filter next time it is switched on.
+    if (tig_video_smooth_prev != NULL) {
+        SDL_free(tig_video_smooth_prev);
+        tig_video_smooth_prev = NULL;
+        tig_video_smooth_prev_size = 0;
+    }
+}
+
+bool tig_video_get_smooth(void)
+{
+    return tig_video_smooth;
+}
+
+static SDL_Texture* tig_video_smooth_frame(void)
+{
+    SDL_Surface* surface = tig_video_state.surface;
+    int w = surface->w;
+    int h = surface->h;
+
+    if (tig_video_smooth_texture == NULL) {
+        tig_video_smooth_texture = SDL_CreateTexture(tig_video_state.renderer,
+            SDL_PIXELFORMAT_XRGB8888,
+            SDL_TEXTUREACCESS_STREAMING,
+            w * 3,
+            h * 3);
+        if (tig_video_smooth_texture == NULL) {
+            tig_video_smooth = false;
+            return NULL;
+        }
+        SDL_SetTextureScaleMode(tig_video_smooth_texture, SDL_SCALEMODE_LINEAR);
+    }
+
+    // Skip the filter when nothing changed since the last frame.
+    size_t size = (size_t)surface->pitch * (size_t)h;
+    if (tig_video_smooth_prev != NULL
+        && tig_video_smooth_prev_size == size
+        && SDL_memcmp(tig_video_smooth_prev, surface->pixels, size) == 0) {
+        return tig_video_smooth_texture;
+    }
+
+    void* pixels;
+    int pitch;
+    if (!SDL_LockTexture(tig_video_smooth_texture, NULL, &pixels, &pitch)) {
+        tig_video_smooth = false;
+        return NULL;
+    }
+    tig_xbr3x((const uint32_t*)surface->pixels, surface->pitch / 4, w, h, (uint32_t*)pixels, pitch / 4);
+    SDL_UnlockTexture(tig_video_smooth_texture);
+
+    if (tig_video_smooth_prev_size != size) {
+        SDL_free(tig_video_smooth_prev);
+        tig_video_smooth_prev = SDL_malloc(size);
+        tig_video_smooth_prev_size = tig_video_smooth_prev != NULL ? size : 0;
+    }
+    if (tig_video_smooth_prev != NULL) {
+        SDL_memcpy(tig_video_smooth_prev, surface->pixels, size);
+    }
+
+    return tig_video_smooth_texture;
+}
+
 int tig_video_flip(void)
 {
-    SDL_UpdateTexture(tig_video_state.texture, NULL, tig_video_state.surface->pixels, tig_video_state.surface->pitch);
+    SDL_Texture* smooth = NULL;
+    if (tig_video_smooth && SDL_BYTESPERPIXEL(tig_video_state.surface->format) == 4) {
+        smooth = tig_video_smooth_frame();
+    }
+
+    if (smooth == NULL) {
+        SDL_UpdateTexture(tig_video_state.texture, NULL, tig_video_state.surface->pixels, tig_video_state.surface->pitch);
+    }
 
     SDL_RenderClear(tig_video_state.renderer);
-    SDL_RenderTexture(tig_video_state.renderer, tig_video_state.texture, NULL, NULL);
+    SDL_RenderTexture(tig_video_state.renderer, smooth != NULL ? smooth : tig_video_state.texture, NULL, NULL);
 
     if (tig_fade_state.enabled) {
         SDL_BlendMode blend_mode;
@@ -1342,6 +1420,14 @@ void tig_video_window_destroy(void)
         SDL_DestroySurface(tig_video_state.surface);
         tig_video_state.surface = NULL;
     }
+
+    if (tig_video_smooth_texture != NULL) {
+        SDL_DestroyTexture(tig_video_smooth_texture);
+        tig_video_smooth_texture = NULL;
+    }
+    SDL_free(tig_video_smooth_prev);
+    tig_video_smooth_prev = NULL;
+    tig_video_smooth_prev_size = 0;
 
     if (tig_video_state.texture != NULL) {
         SDL_DestroyTexture(tig_video_state.texture);

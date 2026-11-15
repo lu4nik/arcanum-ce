@@ -61,6 +61,7 @@ set(SRCS
     "src/timer.c"
     "src/video.c"
     "src/window.c"
+    "src/xbr.c"
 )
 
 add_library(tig_common INTERFACE)

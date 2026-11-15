@@ -48,6 +48,7 @@ void highres_config_reset(void)
     highres_config.height = 600;
     highres_config.windowed = false;
     highres_config.show_fps = false;
+    highres_config.smooth = false;
     highres_config.scroll_fps = 35;
     highres_config.scroll_dist = 10;
     highres_config.logos = true;
@@ -122,6 +123,8 @@ void highres_config_parse_line(char* line)
         highres_config.logos = value != 0;
     } else if (SDL_strcasecmp(key_start, "Intro") == 0) {
         highres_config.intro = value != 0;
+    } else if (SDL_strcasecmp(key_start, "Smooth") == 0) {
+        highres_config.smooth = value != 0;
     }
 }
 

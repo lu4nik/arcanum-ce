@@ -13,6 +13,8 @@ typedef struct HighResConfig {
     int scroll_dist;
     bool logos;
     bool intro;
+    bool smooth; // Local tweak: xBR 3x upscale filter
+
 } HighResConfig;
 
 void highres_config_load(void);

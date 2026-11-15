@@ -113,6 +113,8 @@ void tig_video_display_fps(void);
 int tig_video_blit(TigVideoBuffer* src_video_buffer, TigRect* src_rect, TigRect* dst_rect);
 int tig_video_fill(const TigRect* rect, tig_color_t color);
 int tig_video_flip(void);
+void tig_video_set_smooth(bool enabled);
+bool tig_video_get_smooth(void);
 int tig_video_screenshot_set_settings(TigVideoScreenshotSettings* settings);
 int tig_video_screenshot_make(void);
 int tig_video_get_palette(unsigned int* colors);

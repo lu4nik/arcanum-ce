@@ -211,6 +211,9 @@ int main(int argc, char** argv)
         return EXIT_SUCCESS; // FIXME: Should be `EXIT_FAILURE`.
     }
 
+    // Local tweak: optional xBR upscale filter (toggle in game with F9).
+    tig_video_set_smooth(highres_config->smooth);
+
     screenshotter.key = SDL_SCANCODE_F12;
     screenshotter.field_4 = 0;
     tig_video_screenshot_set_settings(&screenshotter);
@@ -443,6 +446,10 @@ void main_loop(void)
                         }
                         break;
                     }
+                    case SDL_SCANCODE_F9:
+                        // Local tweak: toggle the xBR upscale filter.
+                        tig_video_set_smooth(!tig_video_get_smooth());
+                        break;
                     case SDL_SCANCODE_F10:
                         intgame_toggle_interface();
                         tig_debug_printf("iso_redraw...");
