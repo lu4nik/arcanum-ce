@@ -62,6 +62,8 @@ set(SRCS
     "src/video.c"
     "src/window.c"
     "src/xbr.c"
+    "src/xbrz/xbrz.cpp"
+    "src/xbrz_wrap.cpp"
 )
 
 add_library(tig_common INTERFACE)

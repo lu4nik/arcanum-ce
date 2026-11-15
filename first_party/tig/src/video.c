@@ -239,14 +239,16 @@ int tig_video_fill(const TigRect* rect, tig_color_t color)
 
 // 0x51F8F0
 // Local tweak: optional xBR 3x upscale of the final frame.
-static bool tig_video_smooth;
+static int tig_video_smooth;
+static int tig_video_smooth_label_frames;
 static SDL_Texture* tig_video_smooth_texture;
 static void* tig_video_smooth_prev;
 static size_t tig_video_smooth_prev_size;
 
-void tig_video_set_smooth(bool enabled)
+void tig_video_set_smooth(int mode)
 {
-    tig_video_smooth = enabled;
+    tig_video_smooth = mode;
+    tig_video_smooth_label_frames = 120;
     // Force a full re-filter next time it is switched on.
     if (tig_video_smooth_prev != NULL) {
         SDL_free(tig_video_smooth_prev);
@@ -255,7 +257,7 @@ void tig_video_set_smooth(bool enabled)
     }
 }
 
-bool tig_video_get_smooth(void)
+int tig_video_get_smooth(void)
 {
     return tig_video_smooth;
 }
@@ -273,7 +275,7 @@ static SDL_Texture* tig_video_smooth_frame(void)
             w * 3,
             h * 3);
         if (tig_video_smooth_texture == NULL) {
-            tig_video_smooth = false;
+            tig_video_smooth = 0;
             return NULL;
         }
         SDL_SetTextureScaleMode(tig_video_smooth_texture, SDL_SCALEMODE_LINEAR);
@@ -290,14 +292,18 @@ static SDL_Texture* tig_video_smooth_frame(void)
     void* pixels;
     int pitch;
     if (!SDL_LockTexture(tig_video_smooth_texture, NULL, &pixels, &pitch)) {
-        tig_video_smooth = false;
+        tig_video_smooth = 0;
         return NULL;
     }
     const uint32_t* src = (const uint32_t*)surface->pixels;
     int src_pitch = surface->pitch / 4;
     uint32_t* dst = (uint32_t*)pixels;
     int dst_pitch = pitch / 4;
-    tig_xbr3x(src, src_pitch, w, h, dst, dst_pitch);
+    if (tig_video_smooth == 2) {
+        tig_xbrz3x(src, src_pitch, w, h, dst, dst_pitch);
+    } else {
+        tig_xbr3x(src, src_pitch, w, h, dst, dst_pitch);
+    }
 
     // Keep the interface and its text crisp: plain 3x pixels over UI windows,
     // only the game world underneath gets smoothed.
@@ -360,6 +366,13 @@ int tig_video_flip(void)
             tig_fade_state.color.a);
         SDL_RenderFillRect(tig_video_state.renderer, NULL);
         SDL_SetRenderDrawBlendMode(tig_video_state.renderer, blend_mode);
+    }
+
+    if (tig_video_smooth_label_frames > 0) {
+        static const char* labels[] = { "Filter: off", "Filter: xBR", "Filter: xBRZ (slow)" };
+        tig_video_smooth_label_frames--;
+        SDL_SetRenderDrawColor(tig_video_state.renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+        SDL_RenderDebugText(tig_video_state.renderer, 8, 16, labels[tig_video_smooth % 3]);
     }
 
     if (tig_video_show_fps) {

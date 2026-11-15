@@ -8,6 +8,8 @@ extern "C" {
 #endif
 
 // Local tweak: xBR-style 3x upscale. Pixels are XRGB8888; pitches in pixels.
+// Local tweak: xBRZ 3x (vendored, GPL-3), same contract as tig_xbr3x.
+void tig_xbrz3x(const uint32_t* src, int src_pitch_px, int w, int h, uint32_t* dst, int dst_pitch_px);
 void tig_xbr3x(const uint32_t* src, int src_pitch_px, int w, int h, uint32_t* dst, int dst_pitch_px);
 
 #ifdef __cplusplus

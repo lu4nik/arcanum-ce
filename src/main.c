@@ -448,7 +448,7 @@ void main_loop(void)
                     }
                     case SDL_SCANCODE_F9:
                         // Local tweak: toggle the xBR upscale filter.
-                        tig_video_set_smooth(!tig_video_get_smooth());
+                        tig_video_set_smooth((tig_video_get_smooth() + 1) % 3);
                         break;
                     case SDL_SCANCODE_F10:
                         intgame_toggle_interface();

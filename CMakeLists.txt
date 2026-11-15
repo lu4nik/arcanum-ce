@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.13)
 
-project(arcanum LANGUAGES C)
+project(arcanum LANGUAGES C CXX)
+
+# Local tweak: C++ for the vendored xBRZ upscaler in tig.
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED YES)
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED YES)
