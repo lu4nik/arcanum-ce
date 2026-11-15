@@ -2,6 +2,10 @@
 
 #include <stddef.h>
 
+#ifdef BINK_COMPAT_FFMPEG
+#include "bink_ffmpeg.h"
+#endif
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
 #include <windows.h>
@@ -149,6 +153,20 @@ bool bink_compat_init(void)
         bink_compat_exit();
         return false;
     }
+#elif defined(BINK_COMPAT_FFMPEG)
+    // Local tweak: no binkw32.dll here; decode Bink with FFmpeg instead.
+    BinkFfmpegApi api;
+    bink_ffmpeg_bind(&api);
+    _BinkClose = api.close;
+    _BinkCopyToBuffer = api.copy_to_buffer;
+    _BinkDDSurfaceType = api.dd_surface_type;
+    _BinkDoFrame = api.do_frame;
+    _BinkNextFrame = api.next_frame;
+    _BinkOpen = api.open;
+    _BinkOpenMiles = api.open_miles;
+    _BinkSetSoundSystem = api.set_sound_system;
+    _BinkSetSoundTrack = api.set_sound_track;
+    _BinkWait = api.wait;
 #endif
 
     return true;
