@@ -113,7 +113,7 @@ void tig_video_display_fps(void);
 int tig_video_blit(TigVideoBuffer* src_video_buffer, TigRect* src_rect, TigRect* dst_rect);
 int tig_video_fill(const TigRect* rect, tig_color_t color);
 int tig_video_flip(void);
-// Local tweak: upscale filter mode: 0 = none, 1 = xBR (fast), 2 = xBRZ (slow).
+// Local tweak: upscale filter mode: 0 = none, 1 = xBR, 2 = xBRZ, 3 = ScaleFX (GPU).
 void tig_video_set_smooth(int mode);
 int tig_video_get_smooth(void);
 // Local tweak: false keeps UI windows (and their text) as crisp pixels.

@@ -11,6 +11,7 @@
 #include "tig/file.h"
 #include "tig/memory.h"
 #include "tig/window.h"
+#include "tig/scalefx_gl.h"
 #include "tig/xbr.h"
 #include "tig/message.h"
 #include "tig/mouse.h"
@@ -305,8 +306,17 @@ static SDL_Texture* tig_video_smooth_frame(void)
     int src_pitch = surface->pitch / 4;
     uint32_t* dst = (uint32_t*)pixels;
     int dst_pitch = pitch / 4;
-    if (tig_video_smooth == 2) {
-        tig_xbrz3x(src, src_pitch, w, h, dst, dst_pitch);
+    if (tig_video_smooth == 3
+        && !(tig_scalefx_init("HighRes/shaders") && tig_scalefx_run(src, src_pitch, w, h, dst, dst_pitch))) {
+        // ScaleFX unavailable (no shaders / OpenGL): fall back to xBRZ.
+        tig_video_smooth = 2;
+        tig_video_smooth_label_frames = 120;
+    }
+
+    if (tig_video_smooth >= 2) {
+        if (tig_video_smooth == 2) {
+            tig_xbrz3x(src, src_pitch, w, h, dst, dst_pitch);
+        }
         // Checkerboard dithering (see-through walls) stays as crisp blocks.
         for (int y = 1; y < h - 1; y++) {
             for (int x = 1; x < w - 1; x++) {
@@ -392,10 +402,10 @@ int tig_video_flip(void)
     }
 
     if (tig_video_smooth_label_frames > 0) {
-        static const char* labels[] = { "Filter: off", "Filter: xBR", "Filter: xBRZ (slow)" };
+        static const char* labels[] = { "Filter: off", "Filter: xBR", "Filter: xBRZ", "Filter: ScaleFX (GPU)" };
         tig_video_smooth_label_frames--;
         SDL_SetRenderDrawColor(tig_video_state.renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
-        SDL_RenderDebugText(tig_video_state.renderer, 8, 16, labels[tig_video_smooth % 3]);
+        SDL_RenderDebugText(tig_video_state.renderer, 8, 16, labels[tig_video_smooth % 4]);
     }
 
     if (tig_video_show_fps) {
@@ -1492,6 +1502,7 @@ void tig_video_window_destroy(void)
     SDL_free(tig_video_smooth_prev);
     tig_video_smooth_prev = NULL;
     tig_video_smooth_prev_size = 0;
+    tig_scalefx_exit();
 
     if (tig_video_state.texture != NULL) {
         SDL_DestroyTexture(tig_video_state.texture);

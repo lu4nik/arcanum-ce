@@ -125,7 +125,7 @@ void highres_config_parse_line(char* line)
     } else if (SDL_strcasecmp(key_start, "Intro") == 0) {
         highres_config.intro = value != 0;
     } else if (SDL_strcasecmp(key_start, "Smooth") == 0) {
-        highres_config.smooth = value >= 0 && value <= 2 ? value : 0;
+        highres_config.smooth = value >= 0 && value <= 3 ? value : 0;
     } else if (SDL_strcasecmp(key_start, "SmoothUI") == 0) {
         highres_config.smooth_ui = value != 0;
     }

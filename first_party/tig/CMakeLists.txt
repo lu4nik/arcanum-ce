@@ -61,6 +61,7 @@ set(SRCS
     "src/timer.c"
     "src/video.c"
     "src/window.c"
+    "src/scalefx_gl.c"
     "src/xbr.c"
     "src/xbrz/xbrz.cpp"
     "src/xbrz_wrap.cpp"
@@ -98,6 +99,11 @@ add_library(tig STATIC
 
 # Derive settings from common library.
 target_link_libraries(tig PUBLIC tig_common)
+
+# Local tweak: ScaleFX upscaler uses OpenGL directly.
+if(APPLE)
+    target_link_libraries(tig PUBLIC "-framework OpenGL")
+endif()
 
 # Turn on strict mode (but only for the library itself, hence PRIVATE).
 if(MSVC)
