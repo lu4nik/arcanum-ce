@@ -358,6 +358,9 @@ int tig_video_flip(void)
         SDL_UpdateTexture(tig_video_state.texture, NULL, tig_video_state.surface->pixels, tig_video_state.surface->pitch);
     }
 
+    // Local tweak: letterbox bars must stay black (the filter label leaves the
+    // draw colour white).
+    SDL_SetRenderDrawColor(tig_video_state.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
     SDL_RenderClear(tig_video_state.renderer);
     SDL_RenderTexture(tig_video_state.renderer, smooth != NULL ? smooth : tig_video_state.texture, NULL, NULL);
 
