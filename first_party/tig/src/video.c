@@ -1259,6 +1259,10 @@ bool tig_video_window_create(TigInitInfo* init_info)
 
 // We're using streaming texture which is extremely slow in Metal.
 #if SDL_PLATFORM_MACOS
+    // Local tweak: exclusive (non-Spaces) fullscreen hides the menu bar and
+    // Dock for good, so pushing the cursor to the top edge to scroll the map
+    // no longer reveals the menu bar and steals the mouse.
+    SDL_SetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES, "0");
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl,metal");
 #elif SDL_PLATFORM_IOS
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengles2,metal");
@@ -1273,6 +1277,12 @@ bool tig_video_window_create(TigInitInfo* init_info)
     SDL_PropertiesID renderer_props = SDL_GetRendererProperties(renderer);
     const char* driver_name = SDL_GetStringProperty(renderer_props, SDL_PROP_RENDERER_NAME_STRING, "");
     tig_debug_printf("TIG Video: Using '%s' driver\n", driver_name);
+
+    // Local tweak: keep the cursor inside the game window in fullscreen so
+    // edge scrolling cannot run off to another display or the screen corner.
+    if ((flags & SDL_WINDOW_FULLSCREEN) != 0) {
+        SDL_SetWindowMouseGrab(window, true);
+    }
 
     if ((init_info->flags & TIG_INITIALIZE_POSITIONED) != 0) {
         SDL_SetWindowPosition(window, init_info->x, init_info->y);
