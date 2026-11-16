@@ -1,10 +1,16 @@
 cmake_minimum_required(VERSION 3.13)
 
-project(arcanum LANGUAGES C CXX)
+project(arcanum LANGUAGES C)
 
-# Local tweak: C++ for the vendored xBRZ upscaler in tig.
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED YES)
+# Fork tweak: the vendored xBRZ upscaler is GPL-3, which does not combine with
+# this project's license for redistribution. Off by default; turn it on only
+# for your own build (-DARCANUM_XBRZ=ON). Without it, Smooth=2 uses xBR.
+option(ARCANUM_XBRZ "Build the GPL-3 xBRZ upscaler (personal builds only)" OFF)
+if(ARCANUM_XBRZ)
+    enable_language(CXX)
+    set(CMAKE_CXX_STANDARD 23)
+    set(CMAKE_CXX_STANDARD_REQUIRED YES)
+endif()
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED YES)

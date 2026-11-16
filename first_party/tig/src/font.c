@@ -54,6 +54,13 @@ static void tig_font_log_overflow(const char* reason, const char* str, const Tig
         const char* home = getenv("HOME");
         char path[1024];
         snprintf(path, sizeof(path), "%s/arcanum_overflow.log", home != NULL ? home : "/tmp");
+        // Opt-in: only log when the file already exists (create it to enable).
+        FILE* probe = fopen(path, "r");
+        if (probe == NULL) {
+            fp_failed = true;
+            return;
+        }
+        fclose(probe);
         fp = fopen(path, "a");
         if (fp == NULL) {
             fp_failed = true;

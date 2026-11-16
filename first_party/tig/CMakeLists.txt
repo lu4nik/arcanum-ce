@@ -63,8 +63,6 @@ set(SRCS
     "src/window.c"
     "src/scalefx_gl.c"
     "src/xbr.c"
-    "src/xbrz/xbrz.cpp"
-    "src/xbrz_wrap.cpp"
 )
 
 add_library(tig_common INTERFACE)
@@ -99,6 +97,12 @@ add_library(tig STATIC
 
 # Derive settings from common library.
 target_link_libraries(tig PUBLIC tig_common)
+
+# Fork tweak: optional GPL-3 xBRZ (see ARCANUM_XBRZ in the top CMakeLists).
+if(ARCANUM_XBRZ)
+    target_sources(tig PRIVATE "src/xbrz/xbrz.cpp" "src/xbrz_wrap.cpp")
+    target_compile_definitions(tig PRIVATE TIG_HAVE_XBRZ)
+endif()
 
 # Local tweak: ScaleFX upscaler uses OpenGL directly.
 if(APPLE)

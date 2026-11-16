@@ -416,7 +416,11 @@ int tig_video_flip(void)
     }
 
     if (tig_video_smooth_label_frames > 0) {
+        #ifdef TIG_HAVE_XBRZ
         static const char* labels[] = { "Filter: off", "Filter: xBR", "Filter: xBRZ", "Filter: ScaleFX (GPU)" };
+#else
+        static const char* labels[] = { "Filter: off", "Filter: xBR", "Filter: xBR (xBRZ not built)", "Filter: ScaleFX (GPU)" };
+#endif
         tig_video_smooth_label_frames--;
         SDL_SetRenderDrawColor(tig_video_state.renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
         SDL_RenderDebugText(tig_video_state.renderer, 8, 16, labels[tig_video_smooth % 4]);

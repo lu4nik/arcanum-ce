@@ -11,7 +11,7 @@ set(BINK_COMPAT_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include" PARENT_SCOPE)
 # Local tweak: on macOS decode Bink with a minimal static FFmpeg build
 # (Bink demuxer + decoders only). Point FFMPEG_BINK_PREFIX at its install dir.
 if(APPLE)
-    set(FFMPEG_BINK_PREFIX "$ENV{HOME}/Games/ffmpeg-bink/install" CACHE PATH "Minimal FFmpeg (Bink only) install prefix")
+    set(FFMPEG_BINK_PREFIX "${CMAKE_SOURCE_DIR}/out/ffmpeg-bink" CACHE PATH "Minimal FFmpeg (Bink only) install prefix, see scripts/build_ffmpeg_bink.sh")
     if(EXISTS "${FFMPEG_BINK_PREFIX}/lib/libavformat.a")
         target_sources(bink_compat PRIVATE "src/bink_ffmpeg.c" "src/bink_ffmpeg.h")
         target_compile_definitions(bink_compat PRIVATE BINK_COMPAT_FFMPEG)

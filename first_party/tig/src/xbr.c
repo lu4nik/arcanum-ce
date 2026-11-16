@@ -219,3 +219,11 @@ void tig_xbr3x(const uint32_t* src, int src_pitch_px, int w, int h, uint32_t* ds
     }
 #endif
 }
+
+#ifndef TIG_HAVE_XBRZ
+// Fork tweak: xBRZ not built (GPL-3, personal builds only): use xBR instead.
+void tig_xbrz3x(const uint32_t* src, int src_pitch_px, int w, int h, uint32_t* dst, int dst_pitch_px)
+{
+    tig_xbr3x(src, src_pitch_px, w, h, dst, dst_pitch_px);
+}
+#endif
