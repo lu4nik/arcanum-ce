@@ -1,6 +1,7 @@
 #include "tig/message.h"
 
 #include "tig/button.h"
+#include "tig/compat.h"
 #include "tig/core.h"
 #include "tig/kb.h"
 #include "tig/memory.h"
@@ -143,11 +144,19 @@ void tig_message_ping(void)
         case SDL_EVENT_KEY_UP:
             tig_kb_set_key(event.key.key, event.key.scancode, event.key.down);
             break;
-        case SDL_EVENT_TEXT_INPUT:
+        case SDL_EVENT_TEXT_INPUT: {
+            // Local tweak: the game's text is cp1251; convert typed UTF-8.
+            static char text_buffers[8][64];
+            static int text_buffer_index;
+            char* text = text_buffers[text_buffer_index];
+            text_buffer_index = (text_buffer_index + 1) % 8;
+            SDL_strlcpy(text, event.text.text, sizeof(text_buffers[0]));
+            compat_utf8_to_cp1251(text);
             message.type = TIG_MESSAGE_TEXT_INPUT;
-            message.data.text.text = event.text.text;
+            message.data.text.text = text;
             tig_message_enqueue(&message);
             break;
+        }
         case SDL_EVENT_QUIT:
             tig_message_post_quit(0);
             break;

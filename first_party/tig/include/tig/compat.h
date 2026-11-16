@@ -21,6 +21,8 @@ extern "C" {
 #endif
 
 void compat_windows_path_to_native(char* path);
+void compat_cp1251_to_utf8(char* str, size_t size);
+void compat_utf8_to_cp1251(char* str);
 void compat_resolve_path(char* path);
 void compat_append_path(char* path, size_t size, const char* comp);
 void compat_join_path_ex(char* path, size_t size, ...);

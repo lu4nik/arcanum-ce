@@ -6,6 +6,130 @@
 #include <dirent.h>
 #endif
 
+#include <string.h>
+
+// Local tweak: the game keeps text in cp1251 (the Ukrainian translation), while
+// the file system and SDL text input speak UTF-8. These convert at the edges.
+static const unsigned short compat_cp1251_high[128] = {
+    0x0402, 0x0403, 0x201A, 0x0453, 0x201E, 0x2026, 0x2020, 0x2021,
+    0x20AC, 0x2030, 0x0409, 0x2039, 0x040A, 0x040C, 0x040B, 0x040F,
+    0x0452, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+    0x0000, 0x2122, 0x0459, 0x203A, 0x045A, 0x045C, 0x045B, 0x045F,
+    0x00A0, 0x040E, 0x045E, 0x0408, 0x00A4, 0x0490, 0x00A6, 0x00A7,
+    0x0401, 0x00A9, 0x0404, 0x00AB, 0x00AC, 0x00AD, 0x00AE, 0x0407,
+    0x00B0, 0x00B1, 0x0406, 0x0456, 0x0491, 0x00B5, 0x00B6, 0x00B7,
+    0x0451, 0x2116, 0x0454, 0x00BB, 0x0458, 0x0405, 0x0455, 0x0457,
+    0x0410, 0x0411, 0x0412, 0x0413, 0x0414, 0x0415, 0x0416, 0x0417,
+    0x0418, 0x0419, 0x041A, 0x041B, 0x041C, 0x041D, 0x041E, 0x041F,
+    0x0420, 0x0421, 0x0422, 0x0423, 0x0424, 0x0425, 0x0426, 0x0427,
+    0x0428, 0x0429, 0x042A, 0x042B, 0x042C, 0x042D, 0x042E, 0x042F,
+    0x0430, 0x0431, 0x0432, 0x0433, 0x0434, 0x0435, 0x0436, 0x0437,
+    0x0438, 0x0439, 0x043A, 0x043B, 0x043C, 0x043D, 0x043E, 0x043F,
+    0x0440, 0x0441, 0x0442, 0x0443, 0x0444, 0x0445, 0x0446, 0x0447,
+    0x0448, 0x0449, 0x044A, 0x044B, 0x044C, 0x044D, 0x044E, 0x044F
+};
+
+static size_t compat_utf8_encode(unsigned int cp, char* out)
+{
+    if (cp < 0x80) {
+        out[0] = (char)cp;
+        return 1;
+    }
+    if (cp < 0x800) {
+        out[0] = (char)(0xC0 | (cp >> 6));
+        out[1] = (char)(0x80 | (cp & 0x3F));
+        return 2;
+    }
+    out[0] = (char)(0xE0 | (cp >> 12));
+    out[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
+    out[2] = (char)(0x80 | (cp & 0x3F));
+    return 3;
+}
+
+void compat_cp1251_to_utf8(char* str, size_t size)
+{
+    char tmp[1024];
+    size_t out = 0;
+    const unsigned char* pch;
+    bool high = false;
+
+    for (pch = (const unsigned char*)str; *pch != '\0'; pch++) {
+        if (*pch >= 0x80) {
+            high = true;
+            break;
+        }
+    }
+    if (!high) {
+        return;
+    }
+
+    for (pch = (const unsigned char*)str; *pch != '\0' && out + 4 < sizeof(tmp); pch++) {
+        unsigned int cp = *pch < 0x80 ? *pch : compat_cp1251_high[*pch - 0x80];
+        if (cp == 0) {
+            cp = '_';
+        }
+        out += compat_utf8_encode(cp, &tmp[out]);
+    }
+    tmp[out] = '\0';
+
+    if (out < size) {
+        memcpy(str, tmp, out + 1);
+    }
+}
+
+void compat_utf8_to_cp1251(char* str)
+{
+    const unsigned char* in = (const unsigned char*)str;
+    char* out = str;
+
+    while (*in != '\0') {
+        unsigned int cp;
+        int extra;
+
+        if (*in < 0x80) {
+            *out++ = (char)*in++;
+            continue;
+        }
+
+        if ((*in & 0xE0) == 0xC0) {
+            cp = *in & 0x1F;
+            extra = 1;
+        } else if ((*in & 0xF0) == 0xE0) {
+            cp = *in & 0x0F;
+            extra = 2;
+        } else if ((*in & 0xF8) == 0xF0) {
+            cp = *in & 0x07;
+            extra = 3;
+        } else {
+            in++;
+            continue;
+        }
+        in++;
+        while (extra > 0 && (*in & 0xC0) == 0x80) {
+            cp = (cp << 6) | (*in & 0x3F);
+            in++;
+            extra--;
+        }
+        if (extra != 0) {
+            continue;
+        }
+
+        if (cp == 0x2019 || cp == 0x02BC) {
+            // Typographic apostrophes from the Ukrainian layout.
+            *out++ = '\'';
+            continue;
+        }
+
+        for (int b = 0; b < 128; b++) {
+            if (compat_cp1251_high[b] == cp) {
+                *out++ = (char)(0x80 + b);
+                break;
+            }
+        }
+    }
+    *out = '\0';
+}
+
 void compat_windows_path_to_native(char* path)
 {
 #ifdef _WIN32
@@ -18,6 +142,7 @@ void compat_windows_path_to_native(char* path)
         }
         pch++;
     }
+    compat_cp1251_to_utf8(path, TIG_MAX_PATH);
 #endif
 }
 
