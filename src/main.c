@@ -90,6 +90,14 @@ int main(int argc, char** argv)
     highres_config_load();
     highres_config = highres_config_get();
 
+#if SDL_PLATFORM_MACOS
+    // Local tweak: Renderer=1 in HighRes/config.ini presents through Metal
+    // instead of OpenGL (overrides the driver hint set in tig video).
+    if (highres_config->renderer == 1) {
+        SDL_SetHintWithPriority(SDL_HINT_RENDER_DRIVER, "metal,opengl", SDL_HINT_OVERRIDE);
+    }
+#endif
+
     init_info.texture_width = 1024;
     init_info.texture_height = 1024;
     init_info.flags = 0;

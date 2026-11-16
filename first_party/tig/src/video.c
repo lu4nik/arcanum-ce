@@ -288,9 +288,14 @@ static SDL_Texture* tig_video_smooth_frame(void)
         SDL_SetTextureScaleMode(tig_video_smooth_texture, SDL_SCALEMODE_LINEAR);
     }
 
-    // Skip the filter when nothing changed since the last frame.
+    // Skip the filter when nothing changed since the last frame (unless
+    // benchmarking with ARCANUM_FLIP_BENCH=1).
     size_t size = (size_t)surface->pitch * (size_t)h;
-    if (tig_video_smooth_prev != NULL
+    static int bench = -1;
+    if (bench < 0) {
+        bench = SDL_getenv("ARCANUM_FLIP_BENCH") != NULL;
+    }
+    if (!bench && tig_video_smooth_prev != NULL
         && tig_video_smooth_prev_size == size
         && SDL_memcmp(tig_video_smooth_prev, surface->pixels, size) == 0) {
         return tig_video_smooth_texture;
@@ -373,6 +378,15 @@ static SDL_Texture* tig_video_smooth_frame(void)
 
 int tig_video_flip(void)
 {
+    // Local tweak: optional frame-cost log (ARCANUM_FLIP_BENCH=1).
+    static int flip_bench = -1;
+    static Uint64 flip_total;
+    static int flip_count;
+    if (flip_bench < 0) {
+        flip_bench = SDL_getenv("ARCANUM_FLIP_BENCH") != NULL;
+    }
+    Uint64 flip_start = flip_bench ? SDL_GetTicksNS() : 0;
+
     SDL_Texture* smooth = NULL;
     if (tig_video_smooth && SDL_BYTESPERPIXEL(tig_video_state.surface->format) == 4) {
         smooth = tig_video_smooth_frame();
@@ -411,6 +425,21 @@ int tig_video_flip(void)
     if (tig_video_show_fps) {
         SDL_SetRenderDrawColor(tig_video_state.renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
         SDL_RenderDebugTextFormat(tig_video_state.renderer, 0, 0, "%d", tig_video_state.fps);
+    }
+
+    if (flip_bench) {
+        // Time the work up to the present call (vsync wait excluded).
+        SDL_FlushRenderer(tig_video_state.renderer);
+        flip_total += SDL_GetTicksNS() - flip_start;
+        if (++flip_count == 300) {
+            SDL_PropertiesID props = SDL_GetRendererProperties(tig_video_state.renderer);
+            SDL_Log("Flip bench [%s, filter %d]: %.2f ms/frame",
+                SDL_GetStringProperty(props, SDL_PROP_RENDERER_NAME_STRING, "?"),
+                tig_video_smooth,
+                (double)flip_total / flip_count / 1e6);
+            flip_total = 0;
+            flip_count = 0;
+        }
     }
 
     SDL_RenderPresent(tig_video_state.renderer);
