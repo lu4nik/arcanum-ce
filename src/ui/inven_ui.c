@@ -2181,6 +2181,18 @@ bool inven_ui_message_filter(TigMessage* msg)
                 return true;
             }
         } else if (msg->data.mouse.event == TIG_MESSAGE_MOUSE_LEFT_BUTTON_DOWN
+            && tig_kb_get_modifier(SDL_KMOD_CTRL)
+            && !dword_68346C
+            && inven_ui_drag_item_obj == OBJ_HANDLE_NULL
+            && (inven_ui_mode == INVEN_UI_MODE_BARTER
+                || inven_ui_mode == INVEN_UI_MODE_LOOT
+                || inven_ui_mode == INVEN_UI_MODE_STEAL)) {
+            // Local tweak: Ctrl+click moves the item to the other side, same
+            // as a right click (which is awkward on a trackpad).
+            if (inven_ui_message_filter_handle_mouse_rbutton_up(msg->data.mouse.x, msg->data.mouse.y, &v45)) {
+                return true;
+            }
+        } else if (msg->data.mouse.event == TIG_MESSAGE_MOUSE_LEFT_BUTTON_DOWN
             && !dword_68346C
             && inven_ui_mode != INVEN_UI_MODE_IDENTIFY
             && inven_ui_mode != INVEN_UI_MODE_NPC_IDENTIFY
