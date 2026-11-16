@@ -52,6 +52,7 @@ void highres_config_reset(void)
     highres_config.smooth_ui = true;
     highres_config.renderer = 0;
     highres_config.wheel_scroll = 24;
+    highres_config.ui_scale = 100;
     highres_config.scroll_fps = 35;
     highres_config.scroll_dist = 10;
     highres_config.logos = true;
@@ -128,6 +129,8 @@ void highres_config_parse_line(char* line)
         highres_config.intro = value != 0;
     } else if (SDL_strcasecmp(key_start, "Smooth") == 0) {
         highres_config.smooth = value >= 0 && value <= 3 ? value : 0;
+    } else if (SDL_strcasecmp(key_start, "UIScale") == 0) {
+        highres_config.ui_scale = value;
     } else if (SDL_strcasecmp(key_start, "WheelScroll") == 0) {
         highres_config.wheel_scroll = value;
     } else if (SDL_strcasecmp(key_start, "Renderer") == 0) {

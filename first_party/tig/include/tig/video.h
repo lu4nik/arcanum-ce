@@ -118,6 +118,10 @@ void tig_video_set_smooth(int mode);
 int tig_video_get_smooth(void);
 // Local tweak: false keeps UI windows (and their text) as crisp pixels.
 void tig_video_set_smooth_ui(bool enabled);
+// Local tweak (experiment): interface windows drawn at percent size (100 off);
+// tig_video_ui_unmap maps a screen point back into the real window rect.
+void tig_video_set_ui_scale(int percent);
+void tig_video_ui_unmap(float* x, float* y);
 int tig_video_screenshot_set_settings(TigVideoScreenshotSettings* settings);
 int tig_video_screenshot_make(void);
 int tig_video_get_palette(unsigned int* colors);
