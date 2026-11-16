@@ -118,8 +118,6 @@ void tig_message_ping(void)
             tig_set_active(false);
             break;
         case SDL_EVENT_MOUSE_MOTION:
-            // Local tweak: map points on enlarged UI windows back (UIScale).
-            tig_video_ui_unmap(&event.motion.x, &event.motion.y);
             tig_mouse_set_position((int)event.motion.x, (int)event.motion.y);
             break;
         case SDL_EVENT_MOUSE_BUTTON_DOWN:

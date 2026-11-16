@@ -223,7 +223,6 @@ int main(int argc, char** argv)
     // Local tweak: optional xBR upscale filter (toggle in game with F9).
     tig_video_set_smooth(highres_config->smooth);
     tig_video_set_smooth_ui(highres_config->smooth_ui);
-    tig_video_set_ui_scale(highres_config->ui_scale);
 
     screenshotter.key = SDL_SCANCODE_F12;
     screenshotter.field_4 = 0;

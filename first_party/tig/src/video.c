@@ -249,157 +249,6 @@ void tig_video_set_smooth_ui(bool enabled)
     tig_video_smooth_ui = enabled;
 }
 static SDL_Texture* tig_video_smooth_texture;
-
-// Local tweak (experiment): draw interface windows bigger than the world.
-// Percent; 100 = off. Each window is scaled about the screen edge it touches
-// (or its own centre) and the mouse is mapped back into its real rect.
-typedef struct TigUiMap {
-    TigRect orig;
-    float nx;
-    float ny;
-    float nw;
-    float nh;
-    float scale;
-} TigUiMap;
-static int tig_video_ui_scale = 100;
-static TigUiMap tig_video_ui_maps[64];
-static int tig_video_ui_num_maps;
-static uint32_t* tig_video_ui_tmp;
-static size_t tig_video_ui_tmp_size;
-
-void tig_video_set_ui_scale(int percent)
-{
-    tig_video_ui_scale = percent < 100 ? 100 : (percent > 300 ? 300 : percent);
-}
-
-void tig_video_ui_unmap(float* x, float* y)
-{
-    // Topmost first, same order the windows were laid out in.
-    for (int i = 0; i < tig_video_ui_num_maps; i++) {
-        const TigUiMap* m = &tig_video_ui_maps[i];
-        if (*x >= m->nx && *y >= m->ny && *x < m->nx + m->nw && *y < m->ny + m->nh) {
-            *x = (float)m->orig.x + (*x - m->nx) / m->scale;
-            *y = (float)m->orig.y + (*y - m->ny) / m->scale;
-            return;
-        }
-    }
-}
-
-static void tig_video_ui_scale_windows(uint32_t* dst, int dst_pitch, int w, int h)
-{
-    tig_video_ui_num_maps = 0;
-    if (tig_video_ui_scale <= 100) {
-        return;
-    }
-
-    TigRect rects[64];
-    int n = tig_window_overlay_rects(w, h, rects, 64);
-    float want = (float)tig_video_ui_scale / 100.0f;
-
-    // Lay out topmost first (for the mouse), draw bottom-most first.
-    for (int i = 0; i < n; i++) {
-        TigRect r = rects[i];
-        if (r.width <= 0 || r.height <= 0) {
-            continue;
-        }
-        float s = want;
-        if (s > (float)w / (float)r.width) s = (float)w / (float)r.width;
-        if (s > (float)h / (float)r.height) s = (float)h / (float)r.height;
-        if (s <= 1.0f) {
-            continue;
-        }
-        float nw = r.width * s;
-        float nh = r.height * s;
-        float nx;
-        float ny;
-        if (r.x <= 0) nx = 0;
-        else if (r.x + r.width >= w) nx = w - nw;
-        else nx = r.x + r.width / 2.0f - nw / 2.0f;
-        if (r.y <= 0) ny = 0;
-        else if (r.y + r.height >= h) ny = h - nh;
-        else ny = r.y + r.height / 2.0f - nh / 2.0f;
-        if (nx < 0) nx = 0;
-        if (ny < 0) ny = 0;
-        if (nx + nw > w) nx = w - nw;
-        if (ny + nh > h) ny = h - nh;
-        TigUiMap* m = &tig_video_ui_maps[tig_video_ui_num_maps++];
-        m->orig = r;
-        m->nx = nx;
-        m->ny = ny;
-        m->nw = nw;
-        m->nh = nh;
-        m->scale = s;
-    }
-
-    for (int i = tig_video_ui_num_maps - 1; i >= 0; i--) {
-        const TigUiMap* m = &tig_video_ui_maps[i];
-        int ox = m->orig.x < 0 ? 0 : m->orig.x;
-        int oy = m->orig.y < 0 ? 0 : m->orig.y;
-        int ow = (m->orig.x + m->orig.width > w ? w : m->orig.x + m->orig.width) - ox;
-        int oh = (m->orig.y + m->orig.height > h ? h : m->orig.y + m->orig.height) - oy;
-        if (ow <= 0 || oh <= 0) {
-            continue;
-        }
-
-        // Copy the window's already upscaled (3x) pixels out first: the
-        // enlarged copy overlaps its own source.
-        int tw = ow * 3;
-        int th = oh * 3;
-        size_t need = (size_t)tw * (size_t)th;
-        if (need > tig_video_ui_tmp_size) {
-            SDL_free(tig_video_ui_tmp);
-            tig_video_ui_tmp = (uint32_t*)SDL_malloc(need * 4);
-            tig_video_ui_tmp_size = tig_video_ui_tmp != NULL ? need : 0;
-            if (tig_video_ui_tmp == NULL) {
-                return;
-            }
-        }
-        for (int y = 0; y < th; y++) {
-            SDL_memcpy(tig_video_ui_tmp + (size_t)y * tw, dst + (size_t)(oy * 3 + y) * dst_pitch + ox * 3, (size_t)tw * 4);
-        }
-
-        // Bilinear resample into the enlarged rect (in 3x pixels).
-        float sc = m->scale;
-        int dx0 = (int)(m->nx * 3.0f);
-        int dy0 = (int)(m->ny * 3.0f);
-        int dw = (int)(ow * sc * 3.0f);
-        int dh = (int)(oh * sc * 3.0f);
-        for (int y = 0; y < dh; y++) {
-            int ty = dy0 + y;
-            if (ty < 0 || ty >= h * 3) continue;
-            float fy = (y + 0.5f) / sc - 0.5f;
-            if (fy < 0) fy = 0;
-            int y0 = (int)fy;
-            int y1 = y0 + 1 < th ? y0 + 1 : th - 1;
-            if (y0 >= th) y0 = th - 1;
-            int wy = (int)((fy - y0) * 256.0f);
-            uint32_t* d = dst + (size_t)ty * dst_pitch;
-            const uint32_t* r0 = tig_video_ui_tmp + (size_t)y0 * tw;
-            const uint32_t* r1 = tig_video_ui_tmp + (size_t)y1 * tw;
-            for (int x = 0; x < dw; x++) {
-                int tx = dx0 + x;
-                if (tx < 0 || tx >= w * 3) continue;
-                float fx = (x + 0.5f) / sc - 0.5f;
-                if (fx < 0) fx = 0;
-                int x0 = (int)fx;
-                int x1 = x0 + 1 < tw ? x0 + 1 : tw - 1;
-                if (x0 >= tw) x0 = tw - 1;
-                int wx = (int)((fx - x0) * 256.0f);
-                uint32_t a = r0[x0], b = r0[x1], c = r1[x0], e = r1[x1];
-                uint32_t out = 0xFF000000u;
-                for (int sh = 0; sh < 24; sh += 8) {
-                    int ca = (a >> sh) & 255, cb = (b >> sh) & 255, cc = (c >> sh) & 255, ce = (e >> sh) & 255;
-                    int top = ca * (256 - wx) + cb * wx;
-                    int bot = cc * (256 - wx) + ce * wx;
-                    int v = (top * (256 - wy) + bot * wy) >> 16;
-                    out |= (uint32_t)v << sh;
-                }
-                d[tx] = out;
-            }
-        }
-    }
-}
-
 static void* tig_video_smooth_prev;
 static size_t tig_video_smooth_prev_size;
 
@@ -487,22 +336,8 @@ static SDL_Texture* tig_video_smooth_frame(void)
                 }
             }
         }
-    } else if (tig_video_smooth == 1) {
-        tig_xbr3x(src, src_pitch, w, h, dst, dst_pitch);
     } else {
-        // No filter (only here for the UI scale experiment): plain 3x.
-        for (int y = 0; y < h; y++) {
-            const uint32_t* s = src + (size_t)y * src_pitch;
-            for (int k = 0; k < 3; k++) {
-                uint32_t* d = dst + (size_t)(y * 3 + k) * dst_pitch;
-                for (int x = 0; x < w; x++) {
-                    uint32_t p = s[x] | 0xFF000000u;
-                    d[x * 3] = p;
-                    d[x * 3 + 1] = p;
-                    d[x * 3 + 2] = p;
-                }
-            }
-        }
+        tig_xbr3x(src, src_pitch, w, h, dst, dst_pitch);
     }
 
     // Keep the interface and its text crisp: plain 3x pixels over UI windows,
@@ -527,7 +362,6 @@ static SDL_Texture* tig_video_smooth_frame(void)
             }
         }
     }
-    tig_video_ui_scale_windows(dst, dst_pitch, w, h);
     SDL_UnlockTexture(tig_video_smooth_texture);
 
     if (tig_video_smooth_prev_size != size) {
@@ -554,7 +388,7 @@ int tig_video_flip(void)
     Uint64 flip_start = flip_bench ? SDL_GetTicksNS() : 0;
 
     SDL_Texture* smooth = NULL;
-    if ((tig_video_smooth || tig_video_ui_scale > 100) && SDL_BYTESPERPIXEL(tig_video_state.surface->format) == 4) {
+    if (tig_video_smooth && SDL_BYTESPERPIXEL(tig_video_state.surface->format) == 4) {
         smooth = tig_video_smooth_frame();
     }
 
