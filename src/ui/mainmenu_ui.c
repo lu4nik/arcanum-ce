@@ -3045,9 +3045,17 @@ bool mainmenu_ui_save_game_execute(int btn)
 
         if (mainmenu_ui_gsl.count > 0) {
             if (SDL_toupper(mainmenu_ui_gsl.names[0][4]) == 'A') {
-                if (mainmenu_ui_gsl.count > 1
-                    && mainmenu_ui_gsl.names[1] != NULL) {
-                    strncpy(fname, mainmenu_ui_gsl.names[1], 8);
+                // Local tweak: there may be several auto slots (F7 + rotating
+                // autosaves); take the number from the first regular one.
+                unsigned int first = 0;
+                while (first < (unsigned int)mainmenu_ui_gsl.count
+                    && mainmenu_ui_gsl.names[first] != NULL
+                    && SDL_toupper(mainmenu_ui_gsl.names[first][4]) == 'A') {
+                    first++;
+                }
+                if (first < (unsigned int)mainmenu_ui_gsl.count
+                    && mainmenu_ui_gsl.names[first] != NULL) {
+                    strncpy(fname, mainmenu_ui_gsl.names[first], 8);
                     fname[8] = '\0';
                     num = atoi(&(fname[4])) + 1;
                     if (num >= 9999) {

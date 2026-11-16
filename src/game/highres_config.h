@@ -17,6 +17,7 @@ typedef struct HighResConfig {
     bool smooth_ui; // Local tweak: also smooth UI windows and text
     int renderer; // Local tweak: 0 OpenGL (default), 1 Metal
     int wheel_scroll; // Local tweak: map pan per wheel unit in pixels, 0 = off, <0 = inverted
+    int auto_save; // Local tweak: autosave every N real minutes into two rotating slots, 0 = off
 
 } HighResConfig;
 

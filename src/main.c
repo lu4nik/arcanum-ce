@@ -54,6 +54,7 @@
 static void main_loop(void);
 static void handle_mouse_scroll(void);
 static void handle_wheel_pan(void);
+static void handle_auto_save(void);
 static void handle_keyboard_scroll(void);
 static void build_cmd_line(char* dst, size_t size, int argc, char** argv);
 
@@ -706,6 +707,8 @@ void main_loop(void)
             }
         }
 
+        handle_auto_save();
+
         if (intgame_mode_supports_scrolling(intgame_mode_get())) {
             handle_mouse_scroll();
             handle_wheel_pan();
@@ -814,6 +817,58 @@ void build_cmd_line(char* dst, size_t size, int argc, char** argv)
 // while the cursor is over the game world. Over interface windows the wheel
 // keeps its usual meaning (scrollbars). WheelScroll in HighRes/config.ini sets
 // pixels per wheel unit; 0 disables, negative inverts.
+/**
+ * Local tweak: periodic autosave.
+ *
+ * Every `AutoSave` real minutes (HighRes/config.ini, 0 = off) the game is saved
+ * into one of two rotating slots ("SlotAut1"/"SlotAut2"), so neither the F7
+ * quick save nor a just-made autosave is overwritten. Only saves at a calm
+ * moment: on the map, out of combat, no menu/dialog/world map, PC alive. If
+ * the moment is not calm, it retries on the next frame.
+ */
+static void handle_auto_save(void)
+{
+    static Uint64 last_save_ms;
+    static int next_slot;
+    const HighResConfig* config = highres_config_get();
+    int64_t pc_obj;
+    Uint64 now;
+
+    if (config->auto_save <= 0) {
+        return;
+    }
+
+    now = SDL_GetTicks();
+    if (last_save_ms == 0) {
+        // Count from the first frame of play, not from a save.
+        last_save_ms = now;
+        return;
+    }
+
+    if (now - last_save_ms < (Uint64)config->auto_save * 60 * 1000) {
+        return;
+    }
+
+    pc_obj = player_get_local_pc_obj();
+    if (pc_obj == OBJ_HANDLE_NULL
+        || mainmenu_ui_is_active()
+        || textedit_ui_is_focused()
+        || wmap_ui_is_created()
+        || intgame_mode_get() != INTGAME_MODE_MAIN
+        || critter_is_dead(pc_obj)
+        || combat_turn_based_is_active()
+        || combat_critter_is_combat_mode_active(pc_obj)) {
+        return;
+    }
+
+    mainmenu_ui_feedback_saving();
+    if (gamelib_save(next_slot == 0 ? "SlotAut1" : "SlotAut2", "Auto-Save")) {
+        next_slot = 1 - next_slot;
+    }
+    mainmenu_ui_feedback_saving_completed();
+    last_save_ms = now;
+}
+
 static void handle_wheel_pan(void)
 {
     static float rest_x;
