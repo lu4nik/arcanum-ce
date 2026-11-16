@@ -16,6 +16,12 @@
 - **Comfortable fullscreen.** Exclusive fullscreen: the menu bar no longer slides in at the top edge
   and steals the mouse while edge-scrolling; the cursor stays inside the game.
 - **Two-finger trackpad panning** of the map (the wheel still scrolls lists over interface windows).
+- **Ctrl+click** moves an item to the other side in loot, barter and steal windows (same as a right
+  click, which is awkward on a trackpad).
+- **Autosave** every few minutes into two rotating slots, never over the F7 quick save. See `AutoSave`.
+- **Cyrillic text input** (cp1251): save names, character name and map notes can be typed in Ukrainian.
+- **Premade characters** take their name from the translated level scheme.
+- **Debug log** in `~/Library/Logs/arcanum-ce.log`, rewritten on every start.
 - **Fixes:** texts with the Cyrillic letter «я» (cp1251 byte 0xFF) no longer cut off; UAP 2.x
   Educator's Guide no longer empties two shop inventories; duplicated "ghost" buttons after moving
   windows; black letterbox bars.
@@ -43,6 +49,7 @@ translation.
 | `Width`, `Height` | internal resolution, scaled to fill the screen (e.g. `1152`×`720` is exactly 3× on a 16" MacBook Pro) |
 | `Smooth` | `0` plain pixels, `1` xBR, `2` xBRZ (personal builds only, otherwise xBR), `3` ScaleFX on the GPU. **F9** cycles in game |
 | `SmoothUI` | `1` also smooth interface and text, `0` keep them as crisp pixels |
+| `AutoSave` | autosave every N real minutes into two rotating slots, `0` off (default `10`) |
 | `WheelScroll` | map panning speed for two-finger swipes, `0` off, negative inverts |
 | `Renderer` | `0` OpenGL (default), `1` Metal |
 
