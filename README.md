@@ -1,3 +1,75 @@
+# Arcanum CE — macOS fork (lu4nik)
+
+> **This is a modified version of [Arcanum: Community Edition](https://github.com/alexbatalov/arcanum-ce)
+> by Alexander Batalov.** It is distributed free of charge for non-commercial use under the same
+> [Sustainable Use License](LICENSE.md). The changes below were made with the help of AI (Claude by
+> Anthropic) for playing the game comfortably on a Mac, in particular with the
+> [Ukrainian translation](https://github.com/lu4nik/arcanum-ua). Not affiliated with the upstream
+> project; please do not report problems of this fork upstream.
+
+## What is different from upstream
+
+- **Movies play on macOS.** Bink videos (logos, intro, story cutscenes, endings) are decoded with a
+  minimal static FFmpeg (only the Bink demuxer and decoders), with sound.
+- **Sharp, filtered scaling.** The low-res frame is scaled to the screen without blur; optional
+  edge-smoothing filters: xBR (CPU) and ScaleFX (GPU). See `Smooth` below.
+- **Comfortable fullscreen.** Exclusive fullscreen: the menu bar no longer slides in at the top edge
+  and steals the mouse while edge-scrolling; the cursor stays inside the game.
+- **Two-finger trackpad panning** of the map (the wheel still scrolls lists over interface windows).
+- **Fixes:** texts with the Cyrillic letter «я» (cp1251 byte 0xFF) no longer cut off; UAP 2.x
+  Educator's Guide no longer empties two shop inventories; duplicated "ghost" buttons after moving
+  windows; black letterbox bars.
+
+Tested on macOS (Apple Silicon) with the GOG version, Unofficial Arcanum Patch 2.0.2 and the Ukrainian
+translation.
+
+## Running it on a Mac
+
+1. You need your own copy of the game (GOG or Steam). Extract the Windows game files, for example
+   from the GOG installer with [innoextract](https://constexpr.org/innoextract/)
+   (`innoextract setup_arcanum.exe`; if `-I app` gives nothing, extract everything) and put the
+   game folder at, say, `/Applications/Arcanum`.
+2. Download `arcanum-ce-macos-*.zip` from [Releases](../../releases) and copy its contents into the
+   game folder: `Arcanum Community Edition.app`, `HighRes/config.ini`, `HighRes/shaders/`.
+3. The app is not notarized by Apple: the first time, right-click it → **Open**, or run
+   `xattr -dr com.apple.quarantine "/Applications/Arcanum/Arcanum Community Edition.app"`.
+4. Optional: the Unofficial Arcanum Patch data files and a translation are installed into the same
+   folder as on Windows.
+
+## Settings (`HighRes/config.ini`)
+
+| key | meaning |
+|---|---|
+| `Width`, `Height` | internal resolution, scaled to fill the screen (e.g. `1152`×`720` is exactly 3× on a 16" MacBook Pro) |
+| `Smooth` | `0` plain pixels, `1` xBR, `2` xBRZ (personal builds only, otherwise xBR), `3` ScaleFX on the GPU. **F9** cycles in game |
+| `SmoothUI` | `1` also smooth interface and text, `0` keep them as crisp pixels |
+| `WheelScroll` | map panning speed for two-finger swipes, `0` off, negative inverts |
+| `Renderer` | `0` OpenGL (default), `1` Metal |
+
+## Building
+
+```console
+$ scripts/build_ffmpeg_bink.sh          # minimal FFmpeg for Bink -> out/ffmpeg-bink
+$ cmake --preset macos -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+$ cmake --build --preset macos-release
+```
+
+`-DARCANUM_XBRZ=ON` adds the xBRZ filter. xBRZ is GPL-3, which is incompatible with redistributing it
+inside this project, so it is off by default and the released app does not contain it; enable it only
+for your own build.
+
+## Third-party components
+
+- [FFmpeg](https://ffmpeg.org) 7.1 (LGPL-2.1), statically linked, configured with only the Bink
+  demuxer and decoders; `scripts/build_ffmpeg_bink.sh` rebuilds it so the app can be relinked.
+- [ScaleFX](https://github.com/libretro/glsl-shaders/tree/master/scalefx) shaders by Sp00kyFox (MIT),
+  in `first_party/tig/shaders/scalefx`.
+- [xBRZ](https://sourceforge.net/projects/xbrz/) by Zenju (GPL-3), optional, not in released builds.
+
+---
+
+*The original README of Arcanum: Community Edition follows.*
+
 # Arcanum Community Edition
 
 > [!IMPORTANT]
