@@ -53,6 +53,7 @@
 
 static void main_loop(void);
 static void handle_mouse_scroll(void);
+static void handle_wheel_pan(void);
 static void handle_keyboard_scroll(void);
 static void build_cmd_line(char* dst, size_t size, int argc, char** argv);
 
@@ -707,6 +708,12 @@ void main_loop(void)
 
         if (intgame_mode_supports_scrolling(intgame_mode_get())) {
             handle_mouse_scroll();
+            handle_wheel_pan();
+        } else {
+            // Local tweak: drop wheel deltas gathered outside map mode.
+            float dx;
+            float dy;
+            tig_mouse_wheel_take(&dx, &dy);
         }
     }
 }
@@ -801,4 +808,52 @@ void build_cmd_line(char* dst, size_t size, int argc, char** argv)
     }
 
     *dst = '\0';
+}
+
+// Local tweak: pan the map with two-finger trackpad swipes (or the wheel)
+// while the cursor is over the game world. Over interface windows the wheel
+// keeps its usual meaning (scrollbars). WheelScroll in HighRes/config.ini sets
+// pixels per wheel unit; 0 disables, negative inverts.
+static void handle_wheel_pan(void)
+{
+    static float rest_x;
+    static float rest_y;
+    float dx;
+    float dy;
+
+    tig_mouse_wheel_take(&dx, &dy);
+    if (dx == 0.0f && dy == 0.0f) {
+        return;
+    }
+
+    int speed = highres_config_get()->wheel_scroll;
+    if (speed == 0 || !tig_get_active()) {
+        return;
+    }
+
+    TigMouseState mouse_state;
+    tig_mouse_get_state(&mouse_state);
+
+    TigRect rects[64];
+    int num_rects = tig_window_overlay_rects(hrp_iso_window_width_get(), hrp_iso_window_height_get(), rects, 64);
+    for (int index = 0; index < num_rects; index++) {
+        if (mouse_state.x >= rects[index].x
+            && mouse_state.y >= rects[index].y
+            && mouse_state.x < rects[index].x + rects[index].width
+            && mouse_state.y < rects[index].y + rects[index].height) {
+            return;
+        }
+    }
+
+    // Document-style, following the system scroll direction: content moves
+    // with the fingers.
+    rest_x += -dx * (float)speed;
+    rest_y += dy * (float)speed;
+    int64_t px = (int64_t)rest_x;
+    int64_t py = (int64_t)rest_y;
+    rest_x -= (float)px;
+    rest_y -= (float)py;
+    if (px != 0 || py != 0) {
+        scroll_by(px, py);
+    }
 }

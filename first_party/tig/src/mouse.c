@@ -821,3 +821,21 @@ void tig_mouse_wheel(int dx, int dy)
     message.data.mouse.repeat = false;
     tig_message_enqueue(&message);
 }
+
+// Local tweak: precise wheel/trackpad deltas for map panning (see main.c).
+static float tig_mouse_wheel_acc_x;
+static float tig_mouse_wheel_acc_y;
+
+void tig_mouse_wheel_accumulate(float dx, float dy)
+{
+    tig_mouse_wheel_acc_x += dx;
+    tig_mouse_wheel_acc_y += dy;
+}
+
+void tig_mouse_wheel_take(float* dx, float* dy)
+{
+    *dx = tig_mouse_wheel_acc_x;
+    *dy = tig_mouse_wheel_acc_y;
+    tig_mouse_wheel_acc_x = 0.0f;
+    tig_mouse_wheel_acc_y = 0.0f;
+}

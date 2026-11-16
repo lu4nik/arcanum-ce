@@ -92,6 +92,9 @@ tig_art_id_t tig_mouse_cursor_get_art_id(void);
 int tig_mouse_cursor_overlay(tig_art_id_t art_id, int x, int y);
 
 void tig_mouse_wheel(int dx, int dy);
+// Local tweak: precise wheel/trackpad deltas, accumulated until taken.
+void tig_mouse_wheel_accumulate(float dx, float dy);
+void tig_mouse_wheel_take(float* dx, float* dy);
 
 #ifdef __cplusplus
 }

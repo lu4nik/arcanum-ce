@@ -136,6 +136,8 @@ void tig_message_ping(void)
             break;
         case SDL_EVENT_MOUSE_WHEEL:
             tig_mouse_wheel(event.wheel.integer_x, event.wheel.integer_y);
+            // Local tweak: keep the precise (trackpad) deltas for map panning.
+            tig_mouse_wheel_accumulate(event.wheel.x, event.wheel.y);
             break;
         case SDL_EVENT_KEY_DOWN:
         case SDL_EVENT_KEY_UP:
