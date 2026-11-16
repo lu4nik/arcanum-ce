@@ -7,6 +7,7 @@
 #include "game/critter.h"
 #include "game/descriptions.h"
 #include "game/gamelib.h"
+#include "game/level.h"
 #include "game/gfade.h"
 #include "game/gmovie.h"
 #include "game/gsound.h"
@@ -4246,12 +4247,34 @@ bool mainmenu_ui_new_char_execute(int btn)
     return true;
 }
 
+/**
+ * Local tweak: premade characters take their name from the (translated)
+ * auto-level scheme name, as freshly generated prototypes do. Prototypes that
+ * come ready-made from a .dat (UAP ships two) or from an old proto cache keep
+ * the name they were built with, which may be untranslated.
+ */
+static int64_t mainmenu_ui_pregen_char_lookup(int description)
+{
+    int64_t obj;
+    const char* name;
+
+    obj = obj_pool_perm_lookup(obj_get_id(sub_4685A0(description)));
+    if (obj != OBJ_HANDLE_NULL) {
+        name = auto_level_scheme_name(obj_field_int32_get(obj, OBJ_F_CRITTER_AUTO_LEVEL_SCHEME));
+        if (name != NULL && *name != '\0') {
+            obj_field_string_set(obj, OBJ_F_PC_PLAYER_NAME, name);
+        }
+    }
+
+    return obj;
+}
+
 // 0x545870
 void mainmenu_ui_pregen_char_create(void)
 {
     mainmenu_ui_window_type = MM_WINDOW_PREGEN_CHAR;
     mainmenu_ui_pregen_char_idx = 1;
-    qword_64C460 = obj_pool_perm_lookup(obj_get_id(sub_4685A0(BP_MERWIN_TUMBLEBROOK)));
+    qword_64C460 = mainmenu_ui_pregen_char_lookup(BP_MERWIN_TUMBLEBROOK);
     mainmenu_ui_create_window();
 }
 
@@ -4314,7 +4337,7 @@ bool mainmenu_ui_pregen_char_button_released(tig_button_handle_t button_handle)
         } else {
             mainmenu_ui_pregen_char_idx = mainmenu_ui_pregen_char_cnt - 1;
         }
-        qword_64C460 = obj_pool_perm_lookup(obj_get_id(sub_4685A0(mainmenu_ui_pregen_char_idx + BP_GENERIC_PC)));
+        qword_64C460 = mainmenu_ui_pregen_char_lookup(mainmenu_ui_pregen_char_idx + BP_GENERIC_PC);
         window->refresh_func(NULL);
         return true;
     case 3:
@@ -4323,7 +4346,7 @@ bool mainmenu_ui_pregen_char_button_released(tig_button_handle_t button_handle)
         } else {
             mainmenu_ui_pregen_char_idx = 1;
         }
-        qword_64C460 = obj_pool_perm_lookup(obj_get_id(sub_4685A0(mainmenu_ui_pregen_char_idx + BP_GENERIC_PC)));
+        qword_64C460 = mainmenu_ui_pregen_char_lookup(mainmenu_ui_pregen_char_idx + BP_GENERIC_PC);
         window->refresh_func(NULL);
         return true;
     default:

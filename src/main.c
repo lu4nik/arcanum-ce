@@ -65,6 +65,58 @@ static float gamma = 1.0f;
 static int dword_5CFF00;
 
 // 0x401000
+/**
+ * Local tweak: also write the engine's debug log to
+ * ~/Library/Logs/arcanum-ce.log (macOS) or the pref path elsewhere, truncated
+ * on every start, so that a crash leaves something to read.
+ */
+static FILE* main_log_file;
+static SDL_LogOutputFunction main_log_default_fn;
+static void* main_log_default_userdata;
+
+static void main_log_output(void* userdata, int category, SDL_LogPriority priority, const char* message)
+{
+    (void)userdata;
+
+    if (main_log_file != NULL) {
+        fprintf(main_log_file, "%s\n", message);
+        fflush(main_log_file);
+    }
+
+    if (main_log_default_fn != NULL) {
+        main_log_default_fn(main_log_default_userdata, category, priority, message);
+    }
+}
+
+static void main_log_to_file(void)
+{
+    char path[1024];
+    const char* home = SDL_getenv("HOME");
+
+#if SDL_PLATFORM_MACOS
+    if (home == NULL) {
+        return;
+    }
+    SDL_snprintf(path, sizeof(path), "%s/Library/Logs/arcanum-ce.log", home);
+#else
+    (void)home;
+    char* pref = SDL_GetPrefPath("arcanum-ce", "logs");
+    if (pref == NULL) {
+        return;
+    }
+    SDL_snprintf(path, sizeof(path), "%sarcanum-ce.log", pref);
+    SDL_free(pref);
+#endif
+
+    main_log_file = fopen(path, "w");
+    if (main_log_file == NULL) {
+        return;
+    }
+
+    SDL_GetLogOutputFunction(&main_log_default_fn, &main_log_default_userdata);
+    SDL_SetLogOutputFunction(main_log_output, NULL);
+}
+
 int main(int argc, char** argv)
 {
     TigInitInfo init_info;
@@ -88,6 +140,8 @@ int main(int argc, char** argv)
     // Convert args array to WinMain-like lpCmdLine.
     char lpCmdLine[260];
     build_cmd_line(lpCmdLine, sizeof(lpCmdLine), argc, argv);
+
+    main_log_to_file();
 
     highres_config_load();
     highres_config = highres_config_get();

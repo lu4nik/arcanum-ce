@@ -46,6 +46,41 @@ static size_t compat_utf8_encode(unsigned int cp, char* out)
     return 3;
 }
 
+static bool compat_is_utf8(const char* str)
+{
+    const unsigned char* pch = (const unsigned char*)str;
+
+    while (*pch != '\0') {
+        int extra;
+
+        if (*pch < 0x80) {
+            pch++;
+            continue;
+        }
+
+        if (*pch >= 0xC2 && *pch <= 0xDF) {
+            extra = 1;
+        } else if (*pch >= 0xE0 && *pch <= 0xEF) {
+            extra = 2;
+        } else if (*pch >= 0xF0 && *pch <= 0xF4) {
+            extra = 3;
+        } else {
+            return false;
+        }
+
+        pch++;
+        while (extra > 0) {
+            if ((*pch & 0xC0) != 0x80) {
+                return false;
+            }
+            pch++;
+            extra--;
+        }
+    }
+
+    return true;
+}
+
 void compat_cp1251_to_utf8(char* str, size_t size)
 {
     char tmp[1024];
@@ -60,6 +95,13 @@ void compat_cp1251_to_utf8(char* str, size_t size)
         }
     }
     if (!high) {
+        return;
+    }
+
+    // Paths may pass through here twice (public file functions call each
+    // other with already converted paths). Real cp1251 text is practically
+    // never valid UTF-8, so a valid UTF-8 string is taken as converted.
+    if (compat_is_utf8(str)) {
         return;
     }
 
