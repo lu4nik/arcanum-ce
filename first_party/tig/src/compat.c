@@ -1,3 +1,4 @@
+#define COMPAT_NO_SDL_PATH_WRAPPERS
 #include "tig/compat.h"
 
 #ifdef _WIN32
@@ -423,3 +424,50 @@ void compat_makepath(char* path, const char* drive, const char* dir, const char*
     *path = '\0';
 #endif
 }
+
+#ifdef _WIN32
+static void compat_sdl_path(char* dst, size_t size, const char* src)
+{
+    SDL_strlcpy(dst, src, size);
+    compat_cp1251_to_utf8(dst, size);
+}
+
+bool compat_sdl_get_path_info(const char* path, SDL_PathInfo* info)
+{
+    char tmp[1024];
+    compat_sdl_path(tmp, sizeof(tmp), path);
+    return SDL_GetPathInfo(tmp, info);
+}
+
+bool compat_sdl_remove_path(const char* path)
+{
+    char tmp[1024];
+    compat_sdl_path(tmp, sizeof(tmp), path);
+    return SDL_RemovePath(tmp);
+}
+
+bool compat_sdl_rename_path(const char* oldpath, const char* newpath)
+{
+    char tmp1[1024];
+    char tmp2[1024];
+    compat_sdl_path(tmp1, sizeof(tmp1), oldpath);
+    compat_sdl_path(tmp2, sizeof(tmp2), newpath);
+    return SDL_RenamePath(tmp1, tmp2);
+}
+
+bool compat_sdl_create_directory(const char* path)
+{
+    char tmp[1024];
+    compat_sdl_path(tmp, sizeof(tmp), path);
+    return SDL_CreateDirectory(tmp);
+}
+
+char** compat_sdl_glob_directory(const char* path, const char* pattern, SDL_GlobFlags flags, int* count)
+{
+    char tmp1[1024];
+    char tmp2[1024];
+    compat_sdl_path(tmp1, sizeof(tmp1), path);
+    compat_sdl_path(tmp2, sizeof(tmp2), pattern);
+    return SDL_GlobDirectory(tmp1, tmp2, flags, count);
+}
+#endif
