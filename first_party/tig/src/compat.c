@@ -1,6 +1,8 @@
 #include "tig/compat.h"
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #include <stdlib.h>
 #else
 #include <dirent.h>
@@ -172,10 +174,29 @@ void compat_utf8_to_cp1251(char* str)
     *out = '\0';
 }
 
+// Native paths are UTF-8 on every platform: that is what SDL takes and returns
+// (on Windows too), and compat_fopen widens them for _wfopen there.
+FILE* compat_fopen(const char* path, const char* mode)
+{
+#ifdef _WIN32
+    wchar_t wpath[TIG_MAX_PATH];
+    wchar_t wmode[16];
+
+    if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, TIG_MAX_PATH) == 0
+        || MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, 16) == 0) {
+        return NULL;
+    }
+
+    return _wfopen(wpath, wmode);
+#else
+    return fopen(path, mode);
+#endif
+}
+
 void compat_windows_path_to_native(char* path)
 {
 #ifdef _WIN32
-    (void)path;
+    compat_cp1251_to_utf8(path, TIG_MAX_PATH);
 #else
     char* pch = path;
     while (*pch != '\0') {

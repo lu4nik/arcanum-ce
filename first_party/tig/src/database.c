@@ -69,7 +69,7 @@ TigDatabase* tig_database_open(const char* path)
     long pos;
     long size;
 
-    stream = fopen(path, "rb");
+    stream = compat_fopen(path, "rb");
     if (stream == NULL) {
         return NULL;
     }
@@ -748,7 +748,7 @@ void tig_database_load_ignored(TigDatabase* database)
         return;
     }
 
-    stream = fopen(path, "rt");
+    stream = compat_fopen(path, "rt");
     if (stream == NULL) {
         return;
     }
@@ -847,7 +847,7 @@ bool tig_database_fopen_internal(TigDatabase* database, TigDatabaseEntry* entry,
 
     memset(stream, 0, sizeof(*stream));
 
-    stream->underlying_stream = fopen(database->path, "rb");
+    stream->underlying_stream = compat_fopen(database->path, "rb");
     if (stream->underlying_stream == NULL) {
         return false;
     }

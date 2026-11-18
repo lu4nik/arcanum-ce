@@ -87,9 +87,7 @@ bool tig_find_next_file(TigFindFileData* find_file_data)
     }
 
     strcpy(find_file_data->name, priv->entries[priv->index]);
-#ifndef _WIN32
     compat_utf8_to_cp1251(find_file_data->name);
-#endif
     priv->index++;
 
     return true;

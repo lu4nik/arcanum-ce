@@ -1,6 +1,8 @@
 #ifndef TIG_COMPAT_H_
 #define TIG_COMPAT_H_
 
+#include <stdio.h>
+
 #include "tig/types.h"
 
 #ifdef __cplusplus
@@ -20,6 +22,7 @@ extern "C" {
 #define PATH_SEPARATOR_STR "/"
 #endif
 
+FILE* compat_fopen(const char* path, const char* mode);
 void compat_windows_path_to_native(char* path);
 void compat_cp1251_to_utf8(char* str, size_t size);
 void compat_utf8_to_cp1251(char* str);

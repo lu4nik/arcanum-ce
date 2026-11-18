@@ -1602,7 +1602,7 @@ bool tig_file_lock(const char* filename, const void* owner, size_t size)
         SDL_snprintf(path, sizeof(path), "%s\\%s", repo->path, filename);
     }
 
-    stream = fopen(path, "wbx");
+    stream = compat_fopen(path, "wbx");
     if (stream == NULL) {
         return false;
     }
@@ -1737,7 +1737,7 @@ int tig_file_open_internal_native(const char* path, const char* mode, TigFile* s
     stream->flags &= ~(TIG_FILE_DATABASE | TIG_FILE_PLAIN);
 
     if (path[0] == '.' || path[0] == '\\' || path[1] == ':' || path[0] == '/') {
-        stream->impl.plain_file_stream = fopen(path, mode);
+        stream->impl.plain_file_stream = compat_fopen(path, mode);
         if (stream->impl.plain_file_stream == NULL) {
             return 0;
         }
@@ -1759,7 +1759,7 @@ int tig_file_open_internal_native(const char* path, const char* mode, TigFile* s
                             compat_join_path(mutable_path, sizeof(mutable_path), writeable_repo->path, path);
                             compat_resolve_path(mutable_path);
 
-                            stream->impl.plain_file_stream = fopen(mutable_path, mode);
+                            stream->impl.plain_file_stream = compat_fopen(mutable_path, mode);
                             if (stream->impl.plain_file_stream != NULL) {
                                 stream->flags |= TIG_FILE_PLAIN;
                                 database_entry->flags &= ~TIG_DATABASE_ENTRY_0x100;
@@ -1789,7 +1789,7 @@ int tig_file_open_internal_native(const char* path, const char* mode, TigFile* s
                     compat_join_path(mutable_path, sizeof(mutable_path), repo->path, path);
                     compat_resolve_path(mutable_path);
 
-                    stream->impl.plain_file_stream = fopen(mutable_path, mode);
+                    stream->impl.plain_file_stream = compat_fopen(mutable_path, mode);
                     if (stream->impl.plain_file_stream != NULL) {
                         stream->flags |= TIG_FILE_PLAIN;
                         break;
@@ -1852,7 +1852,7 @@ bool sub_5310C0(const char* filename, const void* owner, size_t size)
     FILE* stream;
     uint8_t file_owner[1024];
 
-    stream = fopen(filename, "rb");
+    stream = compat_fopen(filename, "rb");
     if (stream == NULL) {
         return false;
     }
