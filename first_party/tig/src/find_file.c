@@ -87,6 +87,7 @@ bool tig_find_next_file(TigFindFileData* find_file_data)
     }
 
     strcpy(find_file_data->name, priv->entries[priv->index]);
+    // SDL returns UTF-8 names on every platform; the game wants cp1251.
     compat_utf8_to_cp1251(find_file_data->name);
     priv->index++;
 
