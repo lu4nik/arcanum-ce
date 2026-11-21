@@ -299,7 +299,9 @@ static TigArtCritterSize monster_specie_to_size_tbl[TIG_ART_MONSTER_SPECIE_COUNT
 };
 
 // 0x5BEA14
-static bool tig_art_mirroring_enabled = true;
+// UAP: off. Its animation pack (ArcanumXAnims*.dat) provides real art for
+// rotations 1-3 instead of mirrored 7-5 (no swapped weapon hands).
+static bool tig_art_mirroring_enabled = false;
 
 // 0x5BEA18
 static int dword_5BEA18[4] = {
@@ -1961,6 +1963,11 @@ tig_art_id_t tig_art_critter_id_armor_set(tig_art_id_t art_id, int value)
         }
         return (art_id & ~0xF00000) | (value << CRITTER_ID_ARMOR_SHIFT);
     case TIG_ART_TYPE_MONSTER:
+        // UAP: monsters (orcs, Gar) have no PLATE art but do have classic
+        // plate, so tech plate armor is shown as classic plate.
+        if (value == TIG_ART_ARMOR_TYPE_PLATE) {
+            value = TIG_ART_ARMOR_TYPE_PLATE_CLASSIC;
+        }
         if (value >= 8) {
             tig_debug_println("Range exceeded in art set.");
             value = 0;

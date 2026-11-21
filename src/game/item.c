@@ -3203,6 +3203,11 @@ bool sub_465AE0(int64_t a1, int64_t a2, tig_art_id_t* art_id_ptr)
         use_aid_fragment = obj_field_int32_get(a1, OBJ_F_ITEM_USE_AID_FRAGMENT);
         subtype = tig_art_item_id_subtype_get(use_aid_fragment);
         aid = tig_art_critter_id_armor_set(current_aid, subtype);
+        // UAP: armor_set maps PLATE to PLATE_CLASSIC for monsters.
+        if (tig_art_type(current_aid) == TIG_ART_TYPE_MONSTER
+            && subtype == TIG_ART_ARMOR_TYPE_PLATE) {
+            subtype = TIG_ART_ARMOR_TYPE_PLATE_CLASSIC;
+        }
         if (tig_art_critter_id_armor_get(aid) != subtype) {
             return false;
         }

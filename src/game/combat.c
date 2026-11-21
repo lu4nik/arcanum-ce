@@ -1777,9 +1777,13 @@ void combat_dmg(CombatContext* combat)
             hp_ratio_before = ai_object_hp_ratio(combat->target_obj);
         }
 
-        mes_file_entry.num = 1; // "HT"
-        mes_get_msg(combat_mes_file, &mes_file_entry);
-        snprintf(str, sizeof(str), "%s %d", mes_file_entry.str, dam);
+        // UAP: no "HT 0" floating text when the hit did no damage.
+        str[0] = '\0';
+        if (dam > 0) {
+            mes_file_entry.num = 1; // "HT"
+            mes_get_msg(combat_mes_file, &mes_file_entry);
+            snprintf(str, sizeof(str), "%s %d", mes_file_entry.str, dam);
+        }
 
         combat->total_dam = dam;
 
@@ -1913,7 +1917,7 @@ void combat_dmg(CombatContext* combat)
         }
         object_hp_damage_set(combat->target_obj, hp_dam);
 
-        if (tf_level_get() == TF_LEVEL_VERBOSE) {
+        if (dam > 0 && tf_level_get() == TF_LEVEL_VERBOSE) { // UAP: skip "HT 0"
             mes_file_entry.num = 1; // "HT"
             mes_get_msg(combat_mes_file, &mes_file_entry);
 

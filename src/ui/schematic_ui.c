@@ -656,7 +656,8 @@ void schematic_ui_create(void)
     // Enable the PC lens.
     pc_lens.window_handle = schematic_ui_window;
     pc_lens.rect = &schematic_ui_pc_lens_rect;
-    tig_art_interface_id_create(231, 0, 0, 0, &(pc_lens.art_id));
+    // UAP: Schm_PC_Lens (367); 231 is the barter window's lens cover.
+    tig_art_interface_id_create(367, 0, 0, 0, &(pc_lens.art_id));
     intgame_pc_lens_do(PC_LENS_MODE_PASSTHROUGH, &pc_lens);
 
     // Play sound effect for opening the UI.

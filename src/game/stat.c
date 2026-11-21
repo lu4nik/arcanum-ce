@@ -53,7 +53,7 @@ static int stat_min_values[STAT_COUNT] = {
     /*         STAT_DAMAGE_BONUS */ -50,
     /*        STAT_AC_ADJUSTMENT */ -9,
     /*                STAT_SPEED */ 1,
-    /*            STAT_HEAL_RATE */ 0,
+    /*            STAT_HEAL_RATE */ 1, // UAP: was 0; heal rate 0 meant no HP/fatigue recovery at all
     /*      STAT_POISON_RECOVERY */ 1,
     /*    STAT_REACTION_MODIFIER */ -65,
     /*        STAT_MAX_FOLLOWERS */ 1,
@@ -66,7 +66,7 @@ static int stat_min_values[STAT_COUNT] = {
     /*        STAT_MAGICK_POINTS */ 0,
     /*          STAT_TECH_POINTS */ 0,
     /*         STAT_POISON_LEVEL */ 0,
-    /*                  STAT_AGE */ 20,
+    /*                  STAT_AGE */ 0, // UAP: was 20; clamped younger NPCs to 20
     /*               STAT_GENDER */ 0,
     /*                 STAT_RACE */ 0,
 };
@@ -98,7 +98,7 @@ static int stat_max_values[STAT_COUNT] = {
     /*    STAT_EXPERIENCE_POINTS */ 2000000000,
     /*            STAT_ALIGNMENT */ 1000,
     /*          STAT_FATE_POINTS */ 100,
-    /*       STAT_UNSPENT_POINTS */ 56,
+    /*       STAT_UNSPENT_POINTS */ 10000, // UAP: was 56; hoarded points above it were lost
     /*        STAT_MAGICK_POINTS */ 210,
     /*          STAT_TECH_POINTS */ 210,
     /*         STAT_POISON_LEVEL */ 1000,
@@ -926,7 +926,9 @@ int stat_level_max(int64_t obj, int stat)
         }
         break;
     case RACE_HALF_ELF:
-        if (stat == STAT_DEXTERITY) {
+        // UAP: half-elves get +1 Beauty from their race, so Beauty caps at 21
+        // like Dexterity (vanilla raised only Dexterity).
+        if (stat == STAT_DEXTERITY || stat == STAT_BEAUTY) {
             return 21;
         }
         break;

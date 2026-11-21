@@ -16,6 +16,7 @@
 #include "ui/dialog_ui.h"
 #include "ui/intgame.h"
 #include "ui/inven_ui.h"
+#include "ui/schematic_ui.h"
 #include "ui/tb_ui.h"
 
 /**
@@ -33,6 +34,7 @@ typedef enum FollowerUiCommand {
     FOLLOWER_UI_COMMAND_WAIT,
     FOLLOWER_UI_COMMAND_INVENTORY,
     FOLLOWER_UI_COMMAND_CHARACTER_SHEET,
+    FOLLOWER_UI_COMMAND_SCHEMATICS, // UAP
     FOLLOWER_UI_COMMAND_COUNT,
 } FollowerUiCommand;
 
@@ -152,6 +154,14 @@ typedef enum FollowerUiButton {
  * "follwercomandmenu.art"
  */
 #define FOLLOWER_UI_DROP_DOWN_MENU_ART 826
+
+// UAP: 9-entry menu art ("FollwerComandMenu9.ART") with "Schematics".
+#define FOLLOWER_UI_DROP_DOWN_MENU_ART_UAP 850
+
+// Menu art and number of commands in use: the UAP 9-entry menu when its art
+// is present, otherwise the vanilla 8-entry one.
+static int follower_ui_drop_down_menu_art = FOLLOWER_UI_DROP_DOWN_MENU_ART;
+static int follower_ui_command_count = FOLLOWER_UI_COMMAND_COUNT - 1;
 
 static void follower_ui_create(int index);
 static bool follower_ui_message_filter(TigMessage* msg);
@@ -393,8 +403,18 @@ bool follower_ui_init(GameInitInfo* init_info)
         follower_ui_create(index);
     }
 
+    // UAP: use the 9-entry menu (with "Schematics") when its art exists.
+    if (tig_art_interface_id_create(FOLLOWER_UI_DROP_DOWN_MENU_ART_UAP, 0, 0, 0, &art_id) == TIG_OK
+        && tig_art_exists(art_id) == TIG_OK) {
+        follower_ui_drop_down_menu_art = FOLLOWER_UI_DROP_DOWN_MENU_ART_UAP;
+        follower_ui_command_count = FOLLOWER_UI_COMMAND_COUNT;
+    } else {
+        follower_ui_drop_down_menu_art = FOLLOWER_UI_DROP_DOWN_MENU_ART;
+        follower_ui_command_count = FOLLOWER_UI_COMMAND_COUNT - 1;
+    }
+
     // Determine the drop-down menu dimensions from the background art.
-    tig_art_interface_id_create(FOLLOWER_UI_DROP_DOWN_MENU_ART, 0, 0, 0, &art_id);
+    tig_art_interface_id_create(follower_ui_drop_down_menu_art, 0, 0, 0, &art_id);
     tig_art_frame_data(art_id, &art_frame_data);
 
     // Each slot's drop-down opens immediately to the right of that slot.
@@ -660,7 +680,7 @@ bool follower_ui_message_filter(TigMessage* msg)
             switch (msg->data.button.state) {
             case TIG_BUTTON_STATE_MOUSE_INSIDE:
                 // Highlight the command entry the cursor is over.
-                for (index = 0; index < FOLLOWER_UI_COMMAND_COUNT; index++) {
+                for (index = 0; index < follower_ui_command_count; index++) {
                     if (msg->data.button.button_handle == follower_ui_drop_menu_item_buttons[index]) {
                         follower_ui_drop_down_menu_refresh(index);
                         return true;
@@ -669,7 +689,7 @@ bool follower_ui_message_filter(TigMessage* msg)
                 return false;
             case TIG_BUTTON_STATE_MOUSE_OUTSIDE:
                 // Remove highlighting when cursor leaves a command entry.
-                for (index = 0; index < FOLLOWER_UI_COMMAND_COUNT; index++) {
+                for (index = 0; index < follower_ui_command_count; index++) {
                     if (msg->data.button.button_handle == follower_ui_drop_menu_item_buttons[index]) {
                         follower_ui_drop_down_menu_refresh(-1);
                         return true;
@@ -678,7 +698,7 @@ bool follower_ui_message_filter(TigMessage* msg)
                 return false;
             case TIG_BUTTON_STATE_RELEASED:
                 // Execute the clicked command, then close the menu.
-                for (index = 0; index < FOLLOWER_UI_COMMAND_COUNT; index++) {
+                for (index = 0; index < follower_ui_command_count; index++) {
                     if (msg->data.button.button_handle == follower_ui_drop_menu_item_buttons[index]) {
                         follower_ui_drop_down_menu_destroy();
                         switch (index) {
@@ -696,6 +716,10 @@ bool follower_ui_message_filter(TigMessage* msg)
                             break;
                         case FOLLOWER_UI_COMMAND_CHARACTER_SHEET:
                             charedit_open(follower_ui_subordinate_obj, CHAREDIT_MODE_PASSIVE);
+                            break;
+                        case FOLLOWER_UI_COMMAND_SCHEMATICS:
+                            // UAP: open the follower's schematics.
+                            schematic_ui_toggle(follower_ui_subordinate_obj, follower_ui_commander_obj);
                             break;
                         case FOLLOWER_UI_COMMAND_WAIT:
                             // Mind-controlled followers cannot be ordered to wait.
@@ -875,7 +899,7 @@ void follower_ui_drop_down_menu_create(int index)
     button_data.height = follower_ui_drop_down_menu_entry_rect.height;
     button_data.window_handle = follower_ui_drop_down_menu_window;
 
-    for (cmd = 0; cmd < FOLLOWER_UI_COMMAND_COUNT; cmd++) {
+    for (cmd = 0; cmd < follower_ui_command_count; cmd++) {
         tig_button_create(&button_data, &(follower_ui_drop_menu_item_buttons[cmd]));
         button_data.y += FOLLOWER_UI_DROP_DOWN_MENU_ENTRY_HEIGHT;
     }
@@ -1301,10 +1325,10 @@ void follower_ui_drop_down_menu_refresh(int highlighted_cmd)
     MesFileEntry mes_file_entry;
     bool enabled;
 
-    follower_ui_draw(follower_ui_drop_down_menu_window, FOLLOWER_UI_DROP_DOWN_MENU_ART, 0, 0, 100, 100);
+    follower_ui_draw(follower_ui_drop_down_menu_window, follower_ui_drop_down_menu_art, 0, 0, 100, 100);
 
     rect = follower_ui_drop_down_menu_entry_rect;
-    for (cmd = 0; cmd < FOLLOWER_UI_COMMAND_COUNT; cmd++) {
+    for (cmd = 0; cmd < follower_ui_command_count; cmd++) {
         mes_file_entry.num = cmd;
         if (mes_search(follower_ui_mes_file, &mes_file_entry)) {
             // Determine whether this command is currently available.

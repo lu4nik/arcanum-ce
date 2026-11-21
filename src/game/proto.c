@@ -132,7 +132,9 @@ static int dword_5B384C[OBJ_TYPE_COUNT] = {
     /*            OBJ_TYPE_PC */ 16079,
     /*           OBJ_TYPE_NPC */ 17317,
     /*          OBJ_TYPE_TRAP */ 26008,
-    /*       OBJ_TYPE_MONSTER */ 27394,
+    // UAP adds three unique NPCs (Clockwork Physician, Illuminated Decoy,
+    // Explosive Decoy) as 27394-27396; its engine patch extends this table.
+    /*       OBJ_TYPE_MONSTER */ 27397,
     /*    OBJ_TYPE_UNIQUE_NPC */ 28472,
 };
 
@@ -16100,7 +16102,7 @@ void sub_49B340(int64_t obj, int description)
     if (description >= BP_MONSTER_BEGIN && description < BP_MONSTER_END) {
         stream = tig_file_fopen("rules\\monster.txt", "rt");
         type = 2;
-    } else if (description >= BP_UNIQUE_NPC_BEGIN && description < BP_UNIQUE_NPC_END) {
+    } else if (description >= BP_UNIQUE_NPC_BEGIN && description < BP_UNIQUE_NPC_END + 3) { // UAP: 3 extra unique NPCs
         stream = tig_file_fopen("rules\\unique.txt", "rt");
         type = 1;
     } else if (description >= BP_NPC_BEGIN && description < BP_NPC_END) {

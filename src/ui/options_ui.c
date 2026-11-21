@@ -57,6 +57,8 @@ static void options_ui_float_speed_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_float_speed_set(int value);
 static void options_ui_combat_taunts_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_combat_taunts_set(int value);
+static void options_ui_shadows_get(int* value_ptr, bool* enabled_ptr);
+static void options_ui_shadows_set(int value);
 static void options_ui_effects_volume_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_effects_volume_set(int value);
 static void options_ui_voice_volume_get(int* value_ptr, bool* enabled_ptr);
@@ -114,7 +116,9 @@ static OptionsUiControlInfo options_ui_tab_controls_meta[OPTIONS_UI_TAB_COUNT][M
         { true, CYCLIC_UI_CONTROL_MESSAGE_FILE, 0, "Floats", "mes\\OptionsFloats.mes", options_ui_floats_get, options_ui_floats_set },
         { true, CYCLIC_UI_CONTROL_NUMERIC_BAR, 0, "Float Speed", "", options_ui_float_speed_get, options_ui_float_speed_set },
         { true, CYCLIC_UI_CONTROL_MESSAGE_FILE, 0, "Combat Taunts", "mes\\OptionsOffOn.mes", options_ui_combat_taunts_get, options_ui_combat_taunts_set },
-        { false, 0, 0, "", "", NULL, NULL },
+        // UAP: "Dynamic Shadows" (options_ui.mes 205) toggles the existing
+        // "shadows" setting.
+        { true, CYCLIC_UI_CONTROL_MESSAGE_FILE, 0, "Dynamic Shadows", "mes\\OptionsOffOn.mes", options_ui_shadows_get, options_ui_shadows_set },
         { false, 0, 0, "", "", NULL, NULL },
         { false, 0, 0, "", "", NULL, NULL },
     },
@@ -627,6 +631,23 @@ void options_ui_combat_taunts_get(int* value_ptr, bool* enabled_ptr)
 void options_ui_combat_taunts_set(int value)
 {
     settings_set_value(&settings, COMBAT_TAUNTS_KEY, value);
+}
+
+/**
+ * Called to retrieve the initial value and state of "Dynamic Shadows" (UAP).
+ */
+void options_ui_shadows_get(int* value_ptr, bool* enabled_ptr)
+{
+    *value_ptr = settings_get_value(&settings, SHADOWS_KEY);
+    *enabled_ptr = true;
+}
+
+/**
+ * Called when the value of "Dynamic Shadows" (UAP) is changed.
+ */
+void options_ui_shadows_set(int value)
+{
+    settings_set_value(&settings, SHADOWS_KEY, value);
 }
 
 /**

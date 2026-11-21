@@ -530,6 +530,34 @@ static int intgame_race_icons[RACE_COUNT] = {
     /*       RACE_ORC */ 381, // racehorcicon.art
 };
 
+// UAP gives dark elves, ogres and orcs their own icons (interface.mes
+// 847-849, added by UAP's data); fall back to the table above without it.
+static int intgame_race_icon(int race)
+{
+    tig_art_id_t art_id;
+    int num = 0;
+
+    switch (race) {
+    case RACE_DARK_ELF:
+        num = 847;
+        break;
+    case RACE_OGRE:
+        num = 848;
+        break;
+    case RACE_ORC:
+        num = 849;
+        break;
+    }
+
+    if (num != 0
+        && tig_art_interface_id_create(num, 0, 0, 0, &art_id) == TIG_OK
+        && tig_art_exists(art_id) == TIG_OK) {
+        return num;
+    }
+
+    return intgame_race_icons[race];
+}
+
 // 0x5C6FCC
 static int intgame_alignment_icons[6] = {
     634, // "icon_lawfulevil.art"
@@ -619,6 +647,32 @@ static int intgame_message_icons[UI_MSG_TYPE_COUNT] = {
     /*        UI_MSG_TYPE_STAT */ 0,
     /*   UI_MSG_TYPE_SCHEMATIC */ 0,
 };
+
+// UAP: skill messages show the skill's category icon (interface.mes 799-802,
+// added by UAP's data): combat for skills 0-3, thieving 4-7, social 8-11,
+// tech for tech skills. Falls back to the generic Arcanum icon.
+static int intgame_skill_message_icon(int skill)
+{
+    tig_art_id_t art_id;
+    int num;
+
+    if (skill <= 3) {
+        num = 799;
+    } else if (skill <= 7) {
+        num = 800;
+    } else if (skill <= 11) {
+        num = 801;
+    } else {
+        num = 802;
+    }
+
+    if (tig_art_interface_id_create(num, 0, 0, 0, &art_id) == TIG_OK
+        && tig_art_exists(art_id) == TIG_OK) {
+        return num;
+    }
+
+    return intgame_message_icons[UI_MSG_TYPE_FEEDBACK];
+}
 
 // 0x5C70C8
 static TigRect stru_5C70C8 = { 290, 63, 291, 19 };
@@ -1161,6 +1215,9 @@ bool intgame_load(GameLoadInfo* load_info)
 
     intgame_counters_refresh();
     intgame_refresh_cursor();
+    // UAP: hide a magic-tech button left over from before the load; enable
+    // shows it again only if the loaded weapon is magic-tech.
+    intgame_mt_button_disable();
     intgame_mt_button_enable();
 
     obj = player_get_local_pc_obj();
@@ -1839,9 +1896,11 @@ bool sub_54B5D0(TigMessage* msg)
     char time_str_buffer[80];
     char buffer[80];
 
+    // UAP: the hotkey bar is inert while a dialog is open (clicking a slot
+    // used an item or spell mid-conversation and broke the dialog mode).
     if (scrollbar_ui_process_event(msg)
         || handle_button_unhover(msg)
-        || hotkey_ui_process_event(msg)) {
+        || (intgame_dialog_process_event_func == NULL && hotkey_ui_process_event(msg))) {
         return true;
     }
 
@@ -2685,9 +2744,11 @@ void intgame_process_event(TigMessage* msg)
         }
     }
 
+    // UAP: keys 1-0 pick dialog replies, so they must not also fire hotkeys.
     if (msg->type == TIG_MESSAGE_KEYBOARD
         && !textedit_ui_is_focused()
         && !msg->data.keyboard.pressed
+        && intgame_dialog_process_event_func == NULL
         && msg->data.keyboard.scancode >= SDL_SCANCODE_1
         && msg->data.keyboard.scancode <= SDL_SCANCODE_0) {
         sub_57F1D0(msg->data.keyboard.scancode - SDL_SCANCODE_1);
@@ -5689,7 +5750,9 @@ void intgame_message_draw(tig_window_handle_t window_handle, UiMessage* ui_messa
         break;
     }
     case UI_MSG_TYPE_SKILL:
-        intgame_message_window_draw_image(window_handle, intgame_message_icons[UI_MSG_TYPE_FEEDBACK]);
+        // UAP: per-category skill icon (Combat / Thieving / Social / Tech)
+        // instead of the generic one, when the art is present.
+        intgame_message_window_draw_image(window_handle, intgame_skill_message_icon(ui_message->field_8));
         intgame_message_window_write_text(window_handle,
             IS_TECH_SKILL(ui_message->field_8)
                 ? tech_skill_name(GET_TECH_SKILL(ui_message->field_8))
@@ -6378,7 +6441,7 @@ bool intgame_examine_portrait(int64_t pc_obj, int64_t target_obj, int* portrait_
         }
 
         // Generic race-specific icon.
-        *portrait_ptr = intgame_race_icons[stat_level_get(target_obj, STAT_RACE)];
+        *portrait_ptr = intgame_race_icon(stat_level_get(target_obj, STAT_RACE));
         return false;
     default:
         return false;
@@ -6707,7 +6770,7 @@ void sub_554830(int64_t a1, int64_t a2)
         window_handle = compact_ui_message_window_acquire();
     }
 
-    sub_554B00(window_handle, 582, 207, 57);
+    sub_554B00(window_handle, 582, 207, 59); // UAP: was y=57
 
     weapon_obj = item_wield_get(a1, ITEM_INV_LOC_WEAPON);
     skill = item_weapon_skill(weapon_obj);

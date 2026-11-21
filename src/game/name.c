@@ -699,9 +699,9 @@ tig_art_id_t name_normalize_aid(tig_art_id_t aid)
             } else if (anim >= TIG_ART_ANIM_RUN && anim <= TIG_ART_ANIM_SEVERED_LEG) {
                 weapon = 0;
                 shield = 0;
-            } else if (anim == TIG_ART_ANIM_WALK) {
-                shield = 0;
             }
+            // UAP: walking keeps the shield; its animation pack adds the
+            // shield-walk art that vanilla lacked.
         }
 
         tig_art_critter_id_create(gender, body_type, armor, shield, 0, 0, anim, weapon, 0, &aid);
@@ -773,9 +773,9 @@ tig_art_id_t name_normalize_aid(tig_art_id_t aid)
             } else if (anim >= TIG_ART_ANIM_RUN && anim <= TIG_ART_ANIM_SEVERED_LEG) {
                 weapon = 0;
                 shield = 0;
-            } else if (anim == 1) {
-                shield = 0;
             }
+            // UAP: walking keeps the shield; its animation pack adds the
+            // shield-walk art that vanilla lacked.
         }
 
         tig_art_monster_id_create(specie, armor, shield, 0, 0, anim, weapon, 0, &aid);
@@ -805,9 +805,9 @@ tig_art_id_t name_normalize_aid(tig_art_id_t aid)
             } else if (anim >= TIG_ART_ANIM_RUN && anim <= TIG_ART_ANIM_SEVERED_LEG) {
                 weapon = 0;
                 shield = 0;
-            } else if (anim == 1) {
-                shield = 0;
             }
+            // UAP: walking keeps the shield; its animation pack adds the
+            // shield-walk art that vanilla lacked.
         }
         tig_art_unique_npc_id_create(num, shield, 0, 0, anim, weapon, 0, &aid);
         break;

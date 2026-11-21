@@ -582,7 +582,8 @@ void written_ui_create(void)
     // Enable the PC lens.
     pc_lens.window_handle = written_ui_window;
     pc_lens.rect = &written_ui_lens_rect;
-    tig_art_interface_id_create(231, 0, 0, 0, &(pc_lens.art_id));
+    // UAP: PCWinCvr (198, as in the logbook); 231 is the barter window's.
+    tig_art_interface_id_create(198, 0, 0, 0, &(pc_lens.art_id));
     intgame_pc_lens_do(PC_LENS_MODE_PASSTHROUGH, &pc_lens);
 
     switch (written_ui_type) {

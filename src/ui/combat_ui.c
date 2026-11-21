@@ -232,7 +232,7 @@ void combat_ui_create(void)
     }
 
     rect.x = 222;
-    rect.y = 412;
+    rect.y = 411; // UAP: was 412
     rect.width = art_frame_data.width;
     rect.height = art_frame_data.height;
 
