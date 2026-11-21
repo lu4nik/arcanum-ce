@@ -118,7 +118,7 @@ void logbook_add_injury(int64_t pc_obj, int64_t inflicted_by_obj, int injury)
 
     // Only record injuries inflicted by critters.
     type = obj_field_int32_get(inflicted_by_obj, OBJ_F_TYPE);
-    if (obj_type_is_critter(type)) {
+    if (!obj_type_is_critter(type)) {
         return;
     }
 
