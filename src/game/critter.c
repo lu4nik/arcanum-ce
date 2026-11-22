@@ -2264,13 +2264,162 @@ int critter_encumbrance_level_ratio(int level)
  *
  * 0x45F970
  */
+// Local tweak: the original maps place about 40 NPCs with the opposite-sex
+// generic description (a man made from the "Human City Dweller //Female"
+// template). In English both texts are identical; in a gendered translation
+// the man reads "Городянка". Pick the description that matches the critter.
+// 120 generic critter descriptions that come in a female/male pair with
+// the same English text (description.mes, "//Female" / "//Male" comments).
+static const int critter_gendered_description_pairs[][2] = {
+    { 17067, 17068 },
+    { 17069, 17070 },
+    { 17071, 17072 },
+    { 17073, 17074 },
+    { 17075, 17076 },
+    { 17077, 17078 },
+    { 17079, 17080 },
+    { 17081, 17082 },
+    { 17083, 17084 },
+    { 17085, 17086 },
+    { 17087, 17088 },
+    { 17089, 17090 },
+    { 17091, 17092 },
+    { 17093, 17094 },
+    { 17095, 17096 },
+    { 17097, 17098 },
+    { 17099, 17100 },
+    { 17101, 17102 },
+    { 17103, 17104 },
+    { 17105, 17106 },
+    { 17107, 17108 },
+    { 17109, 17110 },
+    { 17111, 17112 },
+    { 17113, 17114 },
+    { 17115, 17116 },
+    { 17117, 17118 },
+    { 17119, 17120 },
+    { 17121, 17122 },
+    { 17123, 17124 },
+    { 17125, 17126 },
+    { 17127, 17128 },
+    { 17129, 17130 },
+    { 17131, 17132 },
+    { 17133, 17134 },
+    { 17135, 17136 },
+    { 17137, 17138 },
+    { 17139, 17140 },
+    { 17141, 17142 },
+    { 17143, 17144 },
+    { 17145, 17146 },
+    { 17147, 17148 },
+    { 17149, 17150 },
+    { 17151, 17152 },
+    { 17153, 17154 },
+    { 17155, 17156 },
+    { 17157, 17158 },
+    { 17159, 17160 },
+    { 17161, 17162 },
+    { 17163, 17164 },
+    { 17165, 17166 },
+    { 17167, 17168 },
+    { 17169, 17170 },
+    { 17171, 17172 },
+    { 17173, 17174 },
+    { 17175, 17176 },
+    { 17177, 17178 },
+    { 17179, 17180 },
+    { 17181, 17182 },
+    { 17183, 17184 },
+    { 17185, 17186 },
+    { 17187, 17188 },
+    { 17189, 17190 },
+    { 17191, 17192 },
+    { 17193, 17194 },
+    { 17195, 17196 },
+    { 17197, 17198 },
+    { 17199, 17200 },
+    { 17201, 17202 },
+    { 17203, 17204 },
+    { 17205, 17206 },
+    { 17207, 17208 },
+    { 17209, 17210 },
+    { 17211, 17212 },
+    { 17213, 17214 },
+    { 17215, 17216 },
+    { 17217, 17218 },
+    { 17219, 17220 },
+    { 17221, 17222 },
+    { 17223, 17224 },
+    { 17225, 17226 },
+    { 17227, 17228 },
+    { 17229, 17230 },
+    { 17231, 17232 },
+    { 17233, 17234 },
+    { 17235, 17236 },
+    { 17237, 17238 },
+    { 17239, 17240 },
+    { 17241, 17242 },
+    { 17243, 17244 },
+    { 17245, 17246 },
+    { 17247, 17248 },
+    { 17249, 17250 },
+    { 17251, 17252 },
+    { 17253, 17254 },
+    { 17255, 17256 },
+    { 17257, 17258 },
+    { 17259, 17260 },
+    { 17261, 17262 },
+    { 17263, 17264 },
+    { 17265, 17266 },
+    { 17267, 17268 },
+    { 17269, 17270 },
+    { 17271, 17272 },
+    { 17273, 17274 },
+    { 17275, 17276 },
+    { 17277, 17278 },
+    { 17279, 17280 },
+    { 17281, 17282 },
+    { 17283, 17284 },
+    { 17287, 17288 },
+    { 17289, 17290 },
+    { 17291, 17292 },
+    { 17293, 17294 },
+    { 17295, 17296 },
+    { 17297, 17298 },
+    { 17299, 17300 },
+    { 17301, 17302 },
+    { 17303, 17304 },
+    { 17305, 17306 },
+    { 27309, 27310 },
+};
+
+static int critter_description_match_gender(int64_t obj, int description)
+{
+    int gender;
+    size_t index;
+
+    for (index = 0; index < SDL_arraysize(critter_gendered_description_pairs); index++) {
+        if (critter_gendered_description_pairs[index][0] == description
+            || critter_gendered_description_pairs[index][1] == description) {
+            gender = stat_level_get(obj, STAT_GENDER);
+            return critter_gendered_description_pairs[index][gender == GENDER_MALE ? 1 : 0];
+        }
+    }
+
+    return description;
+}
+
 int critter_description_get(int64_t a, int64_t b)
 {
+    int description;
+
     if (a == b || (b != OBJ_HANDLE_NULL && reaction_met_before(a, b))) {
-        return obj_field_int32_get(a, OBJ_F_DESCRIPTION);
+        description = obj_field_int32_get(a, OBJ_F_DESCRIPTION);
     } else {
-        return obj_field_int32_get(a, OBJ_F_CRITTER_DESCRIPTION_UNKNOWN);
+        description = obj_field_int32_get(a, OBJ_F_CRITTER_DESCRIPTION_UNKNOWN);
     }
+
+    return critter_description_match_gender(a, description);
 }
 
 /**
