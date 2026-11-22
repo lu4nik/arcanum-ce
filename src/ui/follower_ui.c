@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include "game/gamelib.h"
 #include "game/broadcast.h"
 #include "game/critter.h"
 #include "game/hrp.h"
@@ -715,7 +716,8 @@ bool follower_ui_message_filter(TigMessage* msg)
                             }
                             break;
                         case FOLLOWER_UI_COMMAND_CHARACTER_SHEET:
-                            charedit_open(follower_ui_subordinate_obj, CHAREDIT_MODE_PASSIVE);
+                            // UAP rules: the follower sheet is editable.
+                            charedit_open(follower_ui_subordinate_obj, gamelib_uap_rules() ? CHAREDIT_MODE_ACTIVE : CHAREDIT_MODE_PASSIVE);
                             break;
                         case FOLLOWER_UI_COMMAND_SCHEMATICS:
                             // UAP: open the follower's schematics.

@@ -4901,7 +4901,13 @@ void sub_551910(TigMessage* msg)
                 && target_pick_at_screen_xy_ex(msg->data.mouse.x, msg->data.mouse.y, &td, TGT_TILE, intgame_fullscreen)
                 && td.is_loc
                 && intgame_mode_get() == INTGAME_MODE_MAIN) {
-                combat_check_move_to(player_get_local_pc_obj(), td.loc);
+                if (inven_ui_drag_item_obj_get() != OBJ_HANDLE_NULL) {
+                    // UAP: while an item is being dragged, preview the 4 AP
+                    // that dropping it costs instead of a walk to the tile.
+                    combat_check_action_points(player_get_local_pc_obj(), 4);
+                } else {
+                    combat_check_move_to(player_get_local_pc_obj(), td.loc);
+                }
             }
         }
     }

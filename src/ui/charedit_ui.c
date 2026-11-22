@@ -1154,7 +1154,9 @@ bool charedit_open(int64_t obj, ChareditMode mode)
     dword_64C824 = TIG_BUTTON_HANDLE_INVALID;
     dword_64CA5C = TIG_BUTTON_HANDLE_INVALID;
 
-    if (charedit_mode == CHAREDIT_MODE_PASSIVE
+    // UAP rules open the follower sheet in ACTIVE mode; the leader check
+    // below keeps the cycle buttons off the PC's own sheet.
+    if ((charedit_mode == CHAREDIT_MODE_PASSIVE || charedit_mode == CHAREDIT_MODE_ACTIVE)
         && critter_leader_get(charedit_obj) == pc_obj
         && critter_follower_next(charedit_obj) != charedit_obj) {
         button_data.flags = TIG_BUTTON_MOMENTARY;
@@ -1251,12 +1253,12 @@ void charedit_refresh_basic_info(void)
     sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[0]), NULL, -1, 3);
     sub_55B880(charedit_window_handle, charedit_morph15_yellow_font, &(stru_5C8150[3]), NULL, -1, 1);
 
-    if (obj_field_int32_get(charedit_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
+    // UAP: non-monstrous NPCs show race, gender and age like the PC (vanilla
+    // left out the age).
+    if (obj_field_int32_get(charedit_obj, OBJ_F_TYPE) == OBJ_TYPE_PC
+        || !critter_is_monstrous(charedit_obj)) {
         sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[4]), NULL, -1, 5);
-    } else if (critter_is_monstrous(charedit_obj)) {
-        sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[7]), NULL, -1, 2);
     } else {
-        sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[4]), NULL, -1, 2);
         sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[7]), NULL, -1, 2);
     }
 
@@ -1299,10 +1301,9 @@ void charedit_refresh_basic_info(void)
     sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[0]), &(labels[0]), -1, 3);
     sub_55B880(charedit_window_handle, charedit_morph15_yellow_font, &(stru_5C8150[3]), &(labels[3]), -1, 1);
 
-    if (obj_field_int32_get(charedit_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
+    if (obj_field_int32_get(charedit_obj, OBJ_F_TYPE) == OBJ_TYPE_PC
+        || !critter_is_monstrous(charedit_obj)) {
         sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[4]), &(labels[4]), -1, 3);
-    } else if (!critter_is_monstrous(charedit_obj)) {
-        sub_55B880(charedit_window_handle, charedit_morph15_white_font, &(stru_5C8150[4]), &(labels[4]), -1, 2);
     }
 }
 

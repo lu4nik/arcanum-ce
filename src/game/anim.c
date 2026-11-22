@@ -257,6 +257,7 @@ static bool AGupdateAnimAttack(AnimRunInfo* run_info);
 static bool sub_432CF0(int64_t critter_obj);
 static bool sub_432D50(AnimRunInfo* run_info);
 static bool sub_433270(AnimRunInfo* run_info);
+static bool anim_attempt_move_charge(AnimRunInfo* run_info);
 static bool sub_4339A0(int64_t obj);
 static int sub_437990(int64_t obj, tig_art_id_t art_id, int speed);
 static bool sub_437C50(AnimRunInfo* run_info, int end, int64_t* x, int64_t* y);
@@ -417,7 +418,7 @@ static AnimGoalNode anim_goal_node_attempt_move = {
         /*  7 */ { sub_4272E0, { AGDATA_SELF_OBJ, -1 }, -1, 9, 0, 8, 0 },
         /*  8 */ { sub_4284F0, { AGDATA_SCRATCH_OBJ, -1 }, -1, 9, 0, 0x52000000 | AG_OPEN_DOOR, 50 },
         /*  9 */ { sub_42E9B0, { AGDATA_SELF_OBJ, -1 }, -1, 10, 0, 0x10000000, 0 },
-        /* 10 */ { sub_433270, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
+        /* 10 */ { anim_attempt_move_charge, { AGDATA_SELF_OBJ, -1 }, 1, 0x90000000, 0, 0x90000000, 0 },
         /* 11 */ { sub_4288A0, { AGDATA_SELF_OBJ, AGDATA_SCRATCH_OBJ }, -1, 0x90000000, 0, 0x50000000 | AG_JUMP_WINDOW, 0 },
         /* 12 */ { sub_4246D0, { -1, -1 }, -1, 0x90000000, 0, 0x50000000 | AG_MOVE_TO_PAUSE, 1000 },
         /* 13 */ { 0 },
@@ -13182,11 +13183,30 @@ bool sub_433270(AnimRunInfo* run_info)
         return false;
     }
 
+    // UAP rules: everyone, the player included, pays 4 AP (vanilla: NPCs pay
+    // 2, the player nothing).
+    if (gamelib_uap_rules()) {
+        return combat_consume_action_points(obj, 4);
+    }
+
     if (player_is_local_pc_obj(run_info->anim_obj)) {
         return true;
     }
 
     return combat_consume_action_points(obj, 2);
+}
+
+/**
+ * Final step of `anim_goal_node_attempt_move`. UAP rules: walking no longer
+ * costs an extra charge on top of the per-step move cost.
+ */
+static bool anim_attempt_move_charge(AnimRunInfo* run_info)
+{
+    if (gamelib_uap_rules()) {
+        return true;
+    }
+
+    return sub_433270(run_info);
 }
 
 // 0x4332E0

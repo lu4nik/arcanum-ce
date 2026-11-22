@@ -658,7 +658,9 @@ void skill_ui_inc_skill(int64_t obj, int skill)
     int cost;
     int points;
 
-    is_pc = player_is_local_pc_obj(obj);
+    // UAP: the character sheet (the only caller) can belong to a follower,
+    // editable under UAP rules, so its feedback applies there too.
+    is_pc = player_is_local_pc_obj(obj) || charedit_is_created();
     if (IS_TECH_SKILL(skill)) {
         skill = GET_TECH_SKILL(skill);
         base = tech_skill_points_get(obj, skill);
@@ -733,7 +735,9 @@ void skill_ui_dec_skill(int64_t obj, int skill)
     int cost;
     int points;
 
-    is_pc = player_is_local_pc_obj(obj);
+    // UAP: the character sheet (the only caller) can belong to a follower,
+    // editable under UAP rules, so its feedback applies there too.
+    is_pc = player_is_local_pc_obj(obj) || charedit_is_created();
     if (IS_TECH_SKILL(skill)) {
         skill = GET_TECH_SKILL(skill);
         base = tech_skill_points_get(obj, skill);

@@ -29,6 +29,11 @@
 #define OBJECT_LIGHTING_KEY "object lighting"
 #define SHADOWS_KEY "shadows"
 
+// Local addition: rule changes from the Unofficial Arcanum Patch 2.0.2
+// (aging, 95% cap on monster resistances, turn-based action point charges,
+// editable follower character sheet). On by default.
+#define UAP_RULES_KEY "uap rules"
+
 typedef bool (*GameExtraSaveFunc)(void);
 typedef bool (*GameExtraLoadFunc)(void);
 
@@ -96,6 +101,7 @@ bool gamelib_mod_guid_get(TigGuid* guid_ptr);
 void gamelib_mod_unload(void);
 bool gamelib_in_reset(void);
 int gamelib_cheat_level_get(void);
+bool gamelib_uap_rules(void);
 void gamelib_cheat_level_set(int level);
 void gamelib_invalidate_rect(TigRect* rect);
 bool gamelib_draw(void);

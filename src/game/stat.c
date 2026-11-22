@@ -6,6 +6,7 @@
 #include "game/combat.h"
 #include "game/critter.h"
 #include "game/effect.h"
+#include "game/gamelib.h"
 #include "game/item.h"
 #include "game/level.h"
 #include "game/light.h"
@@ -353,6 +354,13 @@ int stat_level_get(int64_t obj, int stat)
 
     // Obtain base value.
     value = stat_base_get(obj, stat);
+
+    // UAP rules: everyone gets one year older every 360 game days. Applied
+    // here rather than to the stored base value (as UAP does), so code that
+    // reads and writes back the base age does not bake the years in.
+    if (stat == STAT_AGE && gamelib_uap_rules()) {
+        value += sub_45A7C0().days / 360;
+    }
 
     switch (stat) {
     case STAT_SPEED:

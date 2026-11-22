@@ -59,6 +59,8 @@ static void options_ui_combat_taunts_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_combat_taunts_set(int value);
 static void options_ui_shadows_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_shadows_set(int value);
+static void options_ui_uap_rules_get(int* value_ptr, bool* enabled_ptr);
+static void options_ui_uap_rules_set(int value);
 static void options_ui_effects_volume_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_effects_volume_set(int value);
 static void options_ui_voice_volume_get(int* value_ptr, bool* enabled_ptr);
@@ -119,7 +121,8 @@ static OptionsUiControlInfo options_ui_tab_controls_meta[OPTIONS_UI_TAB_COUNT][M
         // UAP: "Dynamic Shadows" (options_ui.mes 205) toggles the existing
         // "shadows" setting.
         { true, CYCLIC_UI_CONTROL_MESSAGE_FILE, 0, "Dynamic Shadows", "mes\\OptionsOffOn.mes", options_ui_shadows_get, options_ui_shadows_set },
-        { false, 0, 0, "", "", NULL, NULL },
+        // Local addition: "UAP Rules" (options_ui.mes 206), see UAP_RULES_KEY.
+        { true, CYCLIC_UI_CONTROL_MESSAGE_FILE, 0, "UAP Rules", "mes\\OptionsOffOn.mes", options_ui_uap_rules_get, options_ui_uap_rules_set },
         { false, 0, 0, "", "", NULL, NULL },
     },
     {
@@ -239,9 +242,10 @@ void options_ui_start(OptionsUiTab tab, tig_window_handle_t window_handle, bool 
 
         // Load control title from the message file.
         mes_file_entry.num = index + 100 * (tab + 1);
+        // Fall back to the built-in name for entries the stock file lacks.
         control_info.title = mes_search(options_ui_mes_file, &mes_file_entry)
             ? mes_file_entry.str
-            : NULL;
+            : meta->debug_name;
 
         // Finish control set up.
         control_info.mes_file_path = meta->mes;
@@ -711,4 +715,21 @@ void options_ui_music_volume_get(int* value_ptr, bool* enabled_ptr)
 void options_ui_music_volume_set(int value)
 {
     settings_set_value(&settings, MUSIC_VOLUME_KEY, value);
+}
+
+/**
+ * Called to retrieve the initial value and state of "UAP Rules".
+ */
+void options_ui_uap_rules_get(int* value_ptr, bool* enabled_ptr)
+{
+    *value_ptr = settings_get_value(&settings, UAP_RULES_KEY);
+    *enabled_ptr = true;
+}
+
+/**
+ * Called when the value of "UAP Rules" is changed.
+ */
+void options_ui_uap_rules_set(int value)
+{
+    settings_set_value(&settings, UAP_RULES_KEY, value);
 }

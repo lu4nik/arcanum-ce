@@ -117,6 +117,7 @@ typedef struct GameSaveEntry {
 static int game_save_entry_compare_by_date(const void* va, const void* vb);
 static int game_save_entry_compare_by_name(const void* va, const void* vb);
 static void difficulty_changed(void);
+static void uap_rules_changed(void);
 static void gamelib_draw_game(GameDrawInfo* draw_info);
 static void gamelib_draw_editor(GameDrawInfo* draw_info);
 static void gamelib_logo(void);
@@ -325,6 +326,9 @@ bool gamelib_init(GameInitInfo* init_info)
 
     settings_register(&settings, DIFFICULTY_KEY, "1", difficulty_changed);
     difficulty_changed();
+
+    settings_register(&settings, UAP_RULES_KEY, "1", uap_rules_changed);
+    uap_rules_changed();
 
     gamelib_mod_loaded = false;
     gamelib_load_data();
@@ -762,6 +766,25 @@ void gamelib_mod_unload(void)
 bool gamelib_in_reset(void)
 {
     return in_reset;
+}
+
+static bool gamelib_uap_rules_enabled = true;
+
+/**
+ * Called when the "uap rules" setting changes.
+ */
+static void uap_rules_changed(void)
+{
+    gamelib_uap_rules_enabled = settings_get_value(&settings, UAP_RULES_KEY) != 0;
+}
+
+/**
+ * Returns `true` when the rule changes from the Unofficial Arcanum Patch are
+ * enabled (see `UAP_RULES_KEY`).
+ */
+bool gamelib_uap_rules(void)
+{
+    return gamelib_uap_rules_enabled;
 }
 
 // 0x402CB0

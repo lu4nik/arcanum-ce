@@ -1713,7 +1713,9 @@ int object_get_resistance(int64_t obj, int resistance_type, bool a2)
         }
 
         value = effect_adjust_resistance(obj, resistance_type, value);
-        if (obj_type == OBJ_TYPE_NPC) {
+        // UAP rules: monsters are clamped to 0..95 like everyone else, so
+        // "Resistance: 100" monsters lose full immunity.
+        if (obj_type == OBJ_TYPE_NPC && !gamelib_uap_rules()) {
             if (critter_is_monstrous(obj)) {
                 return value;
             }

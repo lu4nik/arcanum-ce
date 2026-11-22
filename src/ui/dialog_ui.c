@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include "game/gamelib.h"
 #include "game/ai.h"
 #include "game/anim.h"
 #include "game/broadcast.h"
@@ -322,7 +323,12 @@ bool dialog_ui_process_option(DialogUiEntry* entry, int option)
     case 5:
         if (is_pc) {
             intgame_dialog_clear();
-            charedit_open(entry->state.npc_obj, CHAREDIT_MODE_PASSIVE);
+            // UAP rules: a follower's sheet is editable. (UAP does this for
+            // any NPC; we limit it to the PC's own followers.)
+            charedit_open(entry->state.npc_obj,
+                gamelib_uap_rules() && critter_leader_get(entry->state.npc_obj) == entry->state.pc_obj
+                    ? CHAREDIT_MODE_ACTIVE
+                    : CHAREDIT_MODE_PASSIVE);
         }
         break;
     case 6:
