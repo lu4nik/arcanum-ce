@@ -16329,6 +16329,127 @@ void sub_49BB40(int64_t obj, int a2)
 }
 
 // 0x49BB70
+// Local fix: rules/npc.txt names stats and spells in English, but the parser
+// used to match them against stat_name()/spell_name(), which come from the
+// (possibly translated) stat.mes/spell.mes. With a localized game every
+// "Basic Stat:"/"Spell:" line failed, so regenerated NPC protos lost gender,
+// race, stats and spells. Match against the original English names instead.
+// English stat/spell names as rules/*.txt spell them (stat.mes 0-27,
+// spell.mes 0-79 of the original game).
+static const char* proto_rule_stat_names[] = {
+    "Strength",
+    "Dexterity",
+    "Constitution",
+    "Beauty",
+    "Intelligence",
+    "Perception",
+    "Willpower",
+    "Charisma",
+    "Carry Weight",
+    "Damage Bonus",
+    "AC Adjustment",
+    "Speed",
+    "Heal Rate",
+    "Poison Recovery",
+    "Reaction Modifier",
+    "Max Followers",
+    "Magick Tech Aptitude",
+    "Level",
+    "Experience Points",
+    "Alignment",
+    "Fate Points",
+    "Unspent Points",
+    "Magick Points",
+    "Tech Points",
+    "Poison Level",
+    "Age",
+    "Gender",
+    "Race",
+};
+
+static const char* proto_rule_spell_names[] = {
+    "Disarm",
+    "Unlocking Cantrip",
+    "Unseen Force",
+    "Spatial Distortion",
+    "Teleportation",
+    "Sense Alignment",
+    "See Contents",
+    "Read Aura",
+    "Sense Hidden",
+    "Divine Magick",
+    "Vitality of Air",
+    "Poison Vapours",
+    "Call Winds",
+    "Body of Air",
+    "Call Air Elemental",
+    "Strength of Earth",
+    "Stone Throw",
+    "Wall of Stone",
+    "Body of Stone",
+    "Call Earth Elemental",
+    "Agility of Fire",
+    "Wall of Fire",
+    "Fireflash",
+    "Body of Fire",
+    "Call Fire Elemental",
+    "Purity of Water",
+    "Call Fog",
+    "Squall of Ice",
+    "Body of Water",
+    "Call Water Elemental",
+    "Shield of Protection",
+    "Jolt",
+    "Wall of Force",
+    "Bolt of Lightning",
+    "Disintegrate",
+    "Charm",
+    "Stun",
+    "Drain Will",
+    "Nightmare",
+    "Dominate Will",
+    "Resist Magick",
+    "Disperse Magick",
+    "Dweomer Shield",
+    "Bonds of Magick",
+    "Reflection Shield",
+    "Hardened Hands",
+    "Weaken",
+    "Shrink",
+    "Flesh to Stone",
+    "Polymorph",
+    "Charm Beast",
+    "Entangle",
+    "Control Beast",
+    "Succour Beast",
+    "Regenerate",
+    "Harm",
+    "Conjure Spirit",
+    "Summon Undead",
+    "Create Undead",
+    "Quench Life",
+    "Minor Healing",
+    "Halt Poison",
+    "Major Healing",
+    "Sanctuary",
+    "Resurrect",
+    "Illuminate",
+    "Flash",
+    "Blur Sight",
+    "Phantasmal Fiend",
+    "Invisibility",
+    "Plague of Insects",
+    "Orcish Champion",
+    "Guardian Ogre",
+    "Hellgate",
+    "Familiar",
+    "Magelock",
+    "Congeal Time",
+    "Hasten",
+    "Stasis",
+    "Tempus Fugit",
+};
+
 bool sub_49BB70(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
 {
     int fld;
@@ -16387,7 +16508,7 @@ bool sub_49BB70(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
         return true;
     case PROTO_F_BASIC_STAT:
         for (stat = STAT_STRENGTH; stat <= STAT_CHARISMA; stat++) {
-            name = stat_name(stat);
+            name = proto_rule_stat_names[stat];
             pos = strlen(name);
             if (SDL_strncasecmp(str, name, pos) == 0) {
                 *a3 = stat;
@@ -16396,7 +16517,7 @@ bool sub_49BB70(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
             }
         }
         for (stat = STAT_MAGICK_POINTS; stat <= STAT_RACE; stat++) {
-            name = stat_name(stat);
+            name = proto_rule_stat_names[stat];
             pos = strlen(name);
             if (SDL_strncasecmp(str, name, pos) == 0) {
                 *a3 = stat;
@@ -16408,7 +16529,7 @@ bool sub_49BB70(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
         return true;
     case PROTO_F_SPELL:
         for (spl = 0; spl < SPELL_COUNT; spl++) {
-            name = spell_name(spl);
+            name = proto_rule_spell_names[spl];
             pos = strlen(name);
             if (SDL_strncasecmp(str, name, pos) == 0) {
                 *a3 = spl;
