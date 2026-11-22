@@ -16333,7 +16333,8 @@ void sub_49BB40(int64_t obj, int a2)
 // used to match them against stat_name()/spell_name(), which come from the
 // (possibly translated) stat.mes/spell.mes. With a localized game every
 // "Basic Stat:"/"Spell:" line failed, so regenerated NPC protos lost gender,
-// race, stats and spells. Match against the original English names instead.
+// race, stats and spells. Match the original English names (and the localized
+// ones, for rules files a translation localized to suit the original exe).
 // English stat/spell names as rules/*.txt spell them (stat.mes 0-27,
 // spell.mes 0-79 of the original game).
 static const char* proto_rule_stat_names[] = {
@@ -16450,6 +16451,31 @@ static const char* proto_rule_spell_names[] = {
     "Tempus Fugit",
 };
 
+// Accept the English name and, for rules files localized together with the
+// mes (as translations do for the original exe), the localized one too.
+static bool proto_rule_name_match(const char* str, const char* english, const char* localized, size_t* len_ptr)
+{
+    size_t len;
+
+    len = strlen(english);
+    if (SDL_strncasecmp(str, english, len) == 0) {
+        *len_ptr = len;
+        return true;
+    }
+
+    if (localized != NULL && localized[0] != '\0') {
+        // Byte-exact: localized names are cp1251, and SDL's case-insensitive
+        // compare decodes UTF-8, turning every cp1251 letter into U+FFFD.
+        len = strlen(localized);
+        if (strncmp(str, localized, len) == 0) {
+            *len_ptr = len;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool sub_49BB70(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
 {
     int fld;
@@ -16508,18 +16534,14 @@ bool sub_49BB70(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
         return true;
     case PROTO_F_BASIC_STAT:
         for (stat = STAT_STRENGTH; stat <= STAT_CHARISMA; stat++) {
-            name = proto_rule_stat_names[stat];
-            pos = strlen(name);
-            if (SDL_strncasecmp(str, name, pos) == 0) {
+            if (proto_rule_name_match(str, proto_rule_stat_names[stat], stat_name(stat), &pos)) {
                 *a3 = stat;
                 *a4 = atoi(str + pos);
                 return true;
             }
         }
         for (stat = STAT_MAGICK_POINTS; stat <= STAT_RACE; stat++) {
-            name = proto_rule_stat_names[stat];
-            pos = strlen(name);
-            if (SDL_strncasecmp(str, name, pos) == 0) {
+            if (proto_rule_name_match(str, proto_rule_stat_names[stat], stat_name(stat), &pos)) {
                 *a3 = stat;
                 *a4 = atoi(str + pos);
                 return true;
@@ -16529,9 +16551,7 @@ bool sub_49BB70(const char* str, int* fld_ptr, int* a3, int* a4, int* a5)
         return true;
     case PROTO_F_SPELL:
         for (spl = 0; spl < SPELL_COUNT; spl++) {
-            name = proto_rule_spell_names[spl];
-            pos = strlen(name);
-            if (SDL_strncasecmp(str, name, pos) == 0) {
+            if (proto_rule_name_match(str, proto_rule_spell_names[spl], spell_name(spl), &pos)) {
                 *a3 = spl;
                 *a4 = atoi(str + pos);
                 return true;
