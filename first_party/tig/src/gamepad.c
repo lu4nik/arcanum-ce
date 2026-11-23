@@ -15,8 +15,9 @@
 //   touchpad            cursor like a laptop trackpad; click = left click
 //   right stick         pan the map; press = centre on the player (Home)
 //   cross   [SOUTH]     left click (hold to drag)
-//   circle  [EAST]      right click
-//   square  [WEST]      highlight objects while held (Left Alt)
+//   circle  [EAST]      on the map: right click; in windows: back (Esc)
+//   square  [WEST]      on the map: highlight objects while held (Left
+//                       Alt); in windows: right click
 //   triangle[NORTH]     turn-based combat on/off, end turn (Space)
 //   R2                  combat mode (R)
 //   d-pad               up = character (C), right = world map (W),
@@ -58,6 +59,9 @@ static bool tig_gamepad_l2_down;
 static bool tig_gamepad_r2_down;
 static bool tig_gamepad_guide_down;
 static bool (*tig_gamepad_sticky_fn)(void);
+static bool (*tig_gamepad_on_map_fn)(void);
+static bool tig_gamepad_east_is_back;
+static bool tig_gamepad_west_is_click;
 static bool tig_gamepad_sticky_prev;
 static Uint64 tig_gamepad_sticky_stop_until_ms;
 static Uint64 tig_gamepad_modifier_since_ms;
@@ -98,6 +102,11 @@ void tig_gamepad_set_pan_speed(int pixels_per_second)
     }
 }
 
+void tig_gamepad_set_on_map_callback(bool (*fn)(void))
+{
+    tig_gamepad_on_map_fn = fn;
+}
+
 void tig_gamepad_set_sticky_callback(bool (*fn)(void))
 {
     tig_gamepad_sticky_fn = fn;
@@ -116,6 +125,10 @@ bool tig_gamepad_handle_event(const SDL_Event* event)
     case SDL_EVENT_GAMEPAD_BUTTON_UP:
         if (tig_gamepad_enabled) {
             tig_set_active(true);
+            tig_debug_printf("Gamepad: button %s %s (L1 %d L2 %d R1 %d)\n",
+                SDL_GetGamepadStringForButton((SDL_GamepadButton)event->gbutton.button),
+                event->gbutton.down ? "down" : "up",
+                tig_gamepad_l1_down, tig_gamepad_l2_down, tig_gamepad_r1_down);
             tig_gamepad_button((SDL_GamepadButton)event->gbutton.button, event->gbutton.down);
         }
         return true;
@@ -351,10 +364,28 @@ static void tig_gamepad_button(SDL_GamepadButton button, bool down)
         tig_mouse_set_button(TIG_MOUSE_BUTTON_LEFT, down);
         break;
     case SDL_GAMEPAD_BUTTON_EAST:
-        tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, down);
+        // The release goes wherever the press went, even if a window opened
+        // or closed in between.
+        if (down) {
+            tig_gamepad_east_is_back = tig_gamepad_on_map_fn != NULL && !tig_gamepad_on_map_fn();
+        }
+        if (tig_gamepad_east_is_back) {
+            if (down) {
+                tig_gamepad_tap(SDL_SCANCODE_ESCAPE);
+            }
+        } else {
+            tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, down);
+        }
         break;
     case SDL_GAMEPAD_BUTTON_WEST:
-        tig_gamepad_key(SDL_SCANCODE_LALT, down);
+        if (down) {
+            tig_gamepad_west_is_click = tig_gamepad_on_map_fn != NULL && !tig_gamepad_on_map_fn();
+        }
+        if (tig_gamepad_west_is_click) {
+            tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, down);
+        } else {
+            tig_gamepad_key(SDL_SCANCODE_LALT, down);
+        }
         break;
     case SDL_GAMEPAD_BUTTON_NORTH:
         if (down) {
@@ -461,6 +492,7 @@ static void tig_gamepad_key(SDL_Scancode scancode, bool down)
 
 static void tig_gamepad_tap(SDL_Scancode scancode)
 {
+    tig_debug_printf("Gamepad: tap %s\n", SDL_GetScancodeName(scancode));
     tig_gamepad_key(scancode, true);
     tig_gamepad_key(scancode, false);
 }

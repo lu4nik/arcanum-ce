@@ -21,6 +21,10 @@ void tig_gamepad_set_pan_speed(int pixels_per_second);
 // moves slower over it, so it does not overshoot while the stick is let go.
 void tig_gamepad_set_sticky_callback(bool (*fn)(void));
 
+// Returns true while the player is on the map (not in a window or menu).
+// Off the map circle is "back" (Esc) and square is the right click.
+void tig_gamepad_set_on_map_callback(bool (*fn)(void));
+
 // Called for every SDL event; returns true if the event was a gamepad event.
 bool tig_gamepad_handle_event(const SDL_Event* event);
 

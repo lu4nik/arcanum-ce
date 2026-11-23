@@ -35,8 +35,8 @@ TEXTS = {
         ],
         'right': [
             ('btn:cross', 'Left click (touchpad too)'),
-            ('btn:circle', 'Right click'),
-            ('btn:square', 'Hold: highlight objects'),
+            ('btn:circle', 'Map: right click; windows: back'),
+            ('btn:square', 'Map: highlight; windows: right click'),
             ('btn:triangle', 'Turn-based mode / end turn'),
             ('tag:L stick', 'Cursor; hold pressed: precise'),
             ('tag:R stick', 'Look around; press: back to hero'),
@@ -61,8 +61,8 @@ TEXTS = {
         ],
         'right': [
             ('btn:cross', 'Лівий клік (і тачпад)'),
-            ('btn:circle', 'Правий клік'),
-            ('btn:square', 'Тримати: підсвітити об’єкти'),
+            ('btn:circle', 'Мапа: правий клік; вікна: назад'),
+            ('btn:square', 'Мапа: підсвітка; вікна: правий клік'),
             ('btn:triangle', 'Покроковий бій / кінець ходу'),
             ('tag:Лівий стік', 'Курсор; затиснути — точно'),
             ('tag:Правий стік', 'Огляд мапи; натиснути — до героя'),
