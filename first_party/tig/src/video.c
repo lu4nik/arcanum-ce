@@ -88,7 +88,9 @@ int tig_video_init(TigInitInfo* init_info)
 {
     memset(&tig_video_state, 0, sizeof(tig_video_state));
 
-    if (init_info->width < 800 || init_info->height < 600) {
+    // Local tweak: 0x0 asks for an automatic size (tig_video_window_create).
+    if ((init_info->width != 0 || init_info->height != 0)
+        && (init_info->width < 800 || init_info->height < 600)) {
         return TIG_ERR_GENERIC;
     }
 
@@ -267,6 +269,124 @@ void tig_video_set_smooth(int mode)
 int tig_video_get_smooth(void)
 {
     return tig_video_smooth;
+}
+
+bool tig_video_has_xbrz(void)
+{
+#ifdef TIG_HAVE_XBRZ
+    return true;
+#else
+    return false;
+#endif
+}
+
+// Local tweak: automatic resolution. Width/Height 0 in HighRes/config.ini
+// picks the logical resolution from the real (safe-area) window size: about
+// 720 game rows, snapped to an integer scale when one is close, never below
+// 800x600. A fixed scale (percent, e.g. 250 = x2.5) can be forced instead.
+static int tig_video_scale_percent;
+
+void tig_video_set_scale(int percent)
+{
+    tig_video_scale_percent = percent > 0 ? percent : 0;
+}
+
+void tig_video_logical_size_for(int pixel_width, int pixel_height, int percent, int* width_ptr, int* height_ptr)
+{
+    float k;
+    float n;
+    int width;
+    int height;
+
+    if (percent > 0) {
+        k = (float)percent / 100.0f;
+    } else {
+        k = (float)pixel_height / 720.0f;
+        n = SDL_roundf(k);
+        if (n >= 1.0f && SDL_fabsf(k - n) <= 0.15f) {
+            k = n;
+        }
+    }
+
+    if (k < 1.0f) {
+        k = 1.0f;
+    }
+
+    if (k == SDL_floorf(k)) {
+        // Whole factor: round down so the frame scales by exactly k.
+        width = pixel_width / (int)k;
+        height = pixel_height / (int)k;
+    } else {
+        width = (int)((float)pixel_width / k + 0.5f);
+        height = (int)((float)pixel_height / k + 0.5f);
+    }
+
+    if (height < 600) {
+        width = (int)((float)pixel_width * 600.0f / (float)pixel_height + 0.5f);
+        height = 600;
+    }
+
+    if (width < 800) {
+        height = (int)((float)pixel_height * 800.0f / (float)pixel_width + 0.5f);
+        width = 800;
+        if (height < 600) {
+            height = 600;
+        }
+    }
+
+    *width_ptr = width;
+    *height_ptr = height;
+}
+
+static bool tig_video_pixels_available;
+static int tig_video_pixels_w;
+static int tig_video_pixels_h;
+
+bool tig_video_screen_pixels(int* width_ptr, int* height_ptr)
+{
+    if (!tig_video_pixels_available) {
+        return false;
+    }
+
+    *width_ptr = tig_video_pixels_w;
+    *height_ptr = tig_video_pixels_h;
+    return true;
+}
+
+static void tig_video_measure_pixels(SDL_Window* window, bool fullscreen)
+{
+    int pw = 0;
+    int ph = 0;
+
+    if (fullscreen) {
+        SDL_Rect safe;
+        float density;
+
+        SDL_SyncWindow(window);
+        SDL_GetWindowSizeInPixels(window, &pw, &ph);
+
+        // MacBook notch: the safe area is the part below the camera housing.
+        density = SDL_GetWindowPixelDensity(window);
+        if (SDL_GetWindowSafeArea(window, &safe) && safe.w > 0 && safe.h > 0 && density > 0.0f) {
+            pw = (int)((float)safe.w * density + 0.5f);
+            ph = (int)((float)safe.h * density + 0.5f);
+        }
+    } else {
+        SDL_Rect usable;
+        SDL_DisplayID display = SDL_GetDisplayForWindow(window);
+        float density = SDL_GetWindowPixelDensity(window);
+
+        if (display != 0 && SDL_GetDisplayUsableBounds(display, &usable) && density > 0.0f) {
+            pw = (int)((float)usable.w * density + 0.5f);
+            ph = (int)((float)usable.h * density + 0.5f);
+        }
+    }
+
+    if (pw > 0 && ph > 0) {
+        tig_video_pixels_available = true;
+        tig_video_pixels_w = pw;
+        tig_video_pixels_h = ph;
+    }
 }
 
 static SDL_Texture* tig_video_smooth_frame(void)
@@ -1412,6 +1532,14 @@ bool tig_video_window_create(TigInitInfo* init_info)
         flags |= SDL_WINDOW_FULLSCREEN;
     }
 
+    // Local tweak: Width/Height 0 = automatic; create the window with a
+    // placeholder size and work out the real one once it exists.
+    bool auto_size = init_info->width <= 0 || init_info->height <= 0;
+    if (auto_size) {
+        init_info->width = 1280;
+        init_info->height = 720;
+    }
+
     float scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
 
     int window_width = (int)(init_info->width * scale);
@@ -1472,6 +1600,41 @@ bool tig_video_window_create(TigInitInfo* init_info)
     if ((init_info->flags & TIG_INITIALIZE_POSITIONED) != 0) {
         SDL_SetWindowPosition(window, init_info->x, init_info->y);
     }
+
+#if !SDL_PLATFORM_ANDROID && !SDL_PLATFORM_IOS
+    tig_video_measure_pixels(window, (flags & SDL_WINDOW_FULLSCREEN) != 0);
+
+    if (auto_size && tig_video_pixels_available) {
+        tig_video_logical_size_for(tig_video_pixels_w,
+            tig_video_pixels_h,
+            tig_video_scale_percent,
+            &(init_info->width),
+            &(init_info->height));
+
+        if ((flags & SDL_WINDOW_FULLSCREEN) == 0) {
+            // Windowed: the largest whole multiple of the logical size that
+            // fits the usable desktop (at least 1x).
+            float density = SDL_GetWindowPixelDensity(window);
+            int fit = SDL_min(tig_video_pixels_w / init_info->width, tig_video_pixels_h / init_info->height);
+            if (fit < 1) {
+                fit = 1;
+            }
+            if (density <= 0.0f) {
+                density = 1.0f;
+            }
+            SDL_SetWindowSize(window,
+                (int)((float)(init_info->width * fit) / density),
+                (int)((float)(init_info->height * fit) / density));
+            SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+        }
+
+        tig_debug_printf("TIG Video: automatic resolution %dx%d for %dx%d pixels\n",
+            init_info->width,
+            init_info->height,
+            tig_video_pixels_w,
+            tig_video_pixels_h);
+    }
+#endif
 
     if (!SDL_SetRenderVSync(renderer, 1)) {
         SDL_DestroyRenderer(renderer);

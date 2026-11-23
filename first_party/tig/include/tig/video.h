@@ -116,6 +116,10 @@ int tig_video_flip(void);
 // Local tweak: upscale filter mode: 0 = none, 1 = xBR, 2 = xBRZ, 3 = ScaleFX (GPU).
 void tig_video_set_smooth(int mode);
 int tig_video_get_smooth(void);
+bool tig_video_has_xbrz(void);
+void tig_video_set_scale(int percent);
+void tig_video_logical_size_for(int pixel_width, int pixel_height, int percent, int* width_ptr, int* height_ptr);
+bool tig_video_screen_pixels(int* width_ptr, int* height_ptr);
 // Local tweak: false keeps UI windows (and their text) as crisp pixels.
 void tig_video_set_smooth_ui(bool enabled);
 int tig_video_screenshot_set_settings(TigVideoScreenshotSettings* settings);

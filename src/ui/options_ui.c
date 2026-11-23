@@ -3,6 +3,7 @@
 #include "game/anim.h"
 #include "game/combat.h"
 #include "game/gamelib.h"
+#include "game/highres_config.h"
 #include "game/location.h"
 #include "game/mes.h"
 #include "game/obj.h"
@@ -12,7 +13,7 @@
 #include "ui/cyclic_ui.h"
 #include "ui/gameuilib.h"
 
-#define MAX_CONTROLS 8
+#define MAX_CONTROLS 10
 
 typedef void (*OptionsUiControlValueGetter)(int* value_ptr, bool* enabled_ptr);
 typedef void (*OptionsUiControlValueSetter)(int value);
@@ -61,6 +62,11 @@ static void options_ui_shadows_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_shadows_set(int value);
 static void options_ui_uap_rules_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_uap_rules_set(int value);
+static void options_ui_scale_get(int* value_ptr, bool* enabled_ptr);
+static void options_ui_scale_set(int value);
+static void options_ui_smooth_get(int* value_ptr, bool* enabled_ptr);
+static void options_ui_smooth_set(int value);
+static void options_ui_video_arrays_build(void);
 static void options_ui_effects_volume_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_effects_volume_set(int value);
 static void options_ui_voice_volume_get(int* value_ptr, bool* enabled_ptr);
@@ -80,6 +86,9 @@ static int options_ui_controls_x[MAX_CONTROLS] = {
     531,
     531,
     531,
+    // Local addition: a fifth row (only the video tab uses it).
+    261,
+    531,
 };
 
 /**
@@ -94,6 +103,8 @@ static int options_ui_controls_y[MAX_CONTROLS] = {
     197,
     272,
     347,
+    422,
+    422,
 };
 
 /**
@@ -123,6 +134,11 @@ static OptionsUiControlInfo options_ui_tab_controls_meta[OPTIONS_UI_TAB_COUNT][M
         { true, CYCLIC_UI_CONTROL_MESSAGE_FILE, 0, "Dynamic Shadows", "mes\\OptionsOffOn.mes", options_ui_shadows_get, options_ui_shadows_set },
         // Local addition: "UAP Rules" (options_ui.mes 206), see UAP_RULES_KEY.
         { true, CYCLIC_UI_CONTROL_MESSAGE_FILE, 0, "UAP Rules", "mes\\OptionsOffOn.mes", options_ui_uap_rules_get, options_ui_uap_rules_set },
+        // Local addition: "Scale" (options_ui.mes 207, applies after a restart)
+        // and "Smoothing" (208, immediate); text arrays built in
+        // options_ui_start.
+        { true, CYCLIC_UI_CONTROL_TEXT_ARRAY, 0, "Scale", "", options_ui_scale_get, options_ui_scale_set },
+        { true, CYCLIC_UI_CONTROL_TEXT_ARRAY, 0, "Smoothing", "", options_ui_smooth_get, options_ui_smooth_set },
         { false, 0, 0, "", "", NULL, NULL },
     },
     {
@@ -181,6 +197,17 @@ static bool options_ui_started;
  */
 static bool options_ui_modlist_initialized;
 
+// Local addition: "Scale" / "Smoothing" choices (see options_ui_video_arrays_build).
+#define OPTIONS_UI_MAX_SCALES 8
+static char options_ui_scale_text[OPTIONS_UI_MAX_SCALES][48];
+static char* options_ui_scale_labels[OPTIONS_UI_MAX_SCALES];
+static int options_ui_scale_percent[OPTIONS_UI_MAX_SCALES]; // -1 = manual Width/Height
+static int options_ui_scale_count;
+static char options_ui_smooth_text[4][32];
+static char* options_ui_smooth_labels[4];
+static int options_ui_smooth_mode[4];
+static int options_ui_smooth_count;
+
 /**
  * Opens the options UI at a specified tab.
  *
@@ -233,6 +260,17 @@ void options_ui_start(OptionsUiTab tab, tig_window_handle_t window_handle, bool 
             control_info.text_array_size = options_ui_modlist.count;
 
             options_ui_modlist_initialized = true;
+        }
+
+        // Local addition: scale and smoothing choices.
+        if (tab == OPTIONS_UI_TAB_VIDEO && meta->getter == options_ui_scale_get) {
+            options_ui_video_arrays_build();
+            control_info.text_array = (const char* const*)options_ui_scale_labels;
+            control_info.text_array_size = options_ui_scale_count;
+        } else if (tab == OPTIONS_UI_TAB_VIDEO && meta->getter == options_ui_smooth_get) {
+            options_ui_video_arrays_build();
+            control_info.text_array = (const char* const*)options_ui_smooth_labels;
+            control_info.text_array_size = options_ui_smooth_count;
         }
 
         // Set up control.
@@ -732,4 +770,144 @@ void options_ui_uap_rules_get(int* value_ptr, bool* enabled_ptr)
 void options_ui_uap_rules_set(int value)
 {
     settings_set_value(&settings, UAP_RULES_KEY, value);
+}
+
+// Local addition: label for a value of the new video controls, from
+// options_ui.mes (290 Auto, 291 Off) with an English fallback.
+static const char* options_ui_local_label(int num, const char* fallback)
+{
+    MesFileEntry mes_file_entry;
+
+    mes_file_entry.num = num;
+    if (options_ui_mes_file != MES_FILE_HANDLE_INVALID
+        && mes_search(options_ui_mes_file, &mes_file_entry)
+        && mes_file_entry.str[0] != '\0') {
+        return mes_file_entry.str;
+    }
+
+    return fallback;
+}
+
+static void options_ui_video_arrays_build(void)
+{
+    static const int factors[] = { 150, 200, 250, 300, 400 };
+    const HighResConfig* config = highres_config_get();
+    int pw;
+    int ph;
+    int w;
+    int h;
+    int index;
+    bool have_pixels = tig_video_screen_pixels(&pw, &ph);
+
+    options_ui_scale_count = 0;
+
+    if (config->width > 0 && config->height > 0) {
+        snprintf(options_ui_scale_text[options_ui_scale_count], sizeof(options_ui_scale_text[0]),
+            "%dx%d", config->width, config->height);
+        options_ui_scale_percent[options_ui_scale_count++] = -1;
+    }
+
+    if (have_pixels) {
+        tig_video_logical_size_for(pw, ph, 0, &w, &h);
+        snprintf(options_ui_scale_text[options_ui_scale_count], sizeof(options_ui_scale_text[0]),
+            "%s (%dx%d)", options_ui_local_label(290, "Auto"), w, h);
+    } else {
+        snprintf(options_ui_scale_text[options_ui_scale_count], sizeof(options_ui_scale_text[0]),
+            "%s", options_ui_local_label(290, "Auto"));
+    }
+    options_ui_scale_percent[options_ui_scale_count++] = 0;
+
+    if (have_pixels) {
+        for (index = 0; index < (int)SDL_arraysize(factors) && options_ui_scale_count < OPTIONS_UI_MAX_SCALES; index++) {
+            tig_video_logical_size_for(pw, ph, factors[index], &w, &h);
+            // Skip factors that would fall under 800x600 (clamped).
+            if (w * factors[index] / 100 > pw + 2 || h * factors[index] / 100 > ph + 2) {
+                continue;
+            }
+            if (factors[index] % 100 == 0) {
+                snprintf(options_ui_scale_text[options_ui_scale_count], sizeof(options_ui_scale_text[0]),
+                    "x%d (%dx%d)", factors[index] / 100, w, h);
+            } else {
+                snprintf(options_ui_scale_text[options_ui_scale_count], sizeof(options_ui_scale_text[0]),
+                    "x%d,%d (%dx%d)", factors[index] / 100, factors[index] % 100 / 10, w, h);
+            }
+            options_ui_scale_percent[options_ui_scale_count++] = factors[index];
+        }
+    }
+
+    for (index = 0; index < options_ui_scale_count; index++) {
+        options_ui_scale_labels[index] = options_ui_scale_text[index];
+    }
+
+    options_ui_smooth_count = 0;
+    snprintf(options_ui_smooth_text[options_ui_smooth_count], sizeof(options_ui_smooth_text[0]), "%s", options_ui_local_label(291, "Off"));
+    options_ui_smooth_mode[options_ui_smooth_count++] = 0;
+    snprintf(options_ui_smooth_text[options_ui_smooth_count], sizeof(options_ui_smooth_text[0]), "xBR");
+    options_ui_smooth_mode[options_ui_smooth_count++] = 1;
+    if (tig_video_has_xbrz()) {
+        snprintf(options_ui_smooth_text[options_ui_smooth_count], sizeof(options_ui_smooth_text[0]), "xBRZ");
+        options_ui_smooth_mode[options_ui_smooth_count++] = 2;
+    }
+    snprintf(options_ui_smooth_text[options_ui_smooth_count], sizeof(options_ui_smooth_text[0]), "ScaleFX");
+    options_ui_smooth_mode[options_ui_smooth_count++] = 3;
+
+    for (index = 0; index < options_ui_smooth_count; index++) {
+        options_ui_smooth_labels[index] = options_ui_smooth_text[index];
+    }
+}
+
+void options_ui_scale_get(int* value_ptr, bool* enabled_ptr)
+{
+    const HighResConfig* config = highres_config_get();
+    int index;
+
+    *value_ptr = 0;
+    *enabled_ptr = true;
+
+    for (index = 0; index < options_ui_scale_count; index++) {
+        if (options_ui_scale_percent[index] == -1) {
+            // Manual Width/Height in the config is the current choice.
+            *value_ptr = index;
+            return;
+        }
+        if (options_ui_scale_percent[index] == config->scale) {
+            *value_ptr = index;
+        }
+    }
+}
+
+void options_ui_scale_set(int value)
+{
+    if (value < 0 || value >= options_ui_scale_count || options_ui_scale_percent[value] == -1) {
+        return;
+    }
+
+    // Takes effect on the next start.
+    highres_config_save_int("Width", 0);
+    highres_config_save_int("Height", 0);
+    highres_config_save_int("Scale", options_ui_scale_percent[value]);
+}
+
+void options_ui_smooth_get(int* value_ptr, bool* enabled_ptr)
+{
+    int mode = tig_video_get_smooth();
+    int index;
+
+    *value_ptr = 0;
+    *enabled_ptr = true;
+    for (index = 0; index < options_ui_smooth_count; index++) {
+        if (options_ui_smooth_mode[index] == mode) {
+            *value_ptr = index;
+        }
+    }
+}
+
+void options_ui_smooth_set(int value)
+{
+    if (value < 0 || value >= options_ui_smooth_count) {
+        return;
+    }
+
+    tig_video_set_smooth(options_ui_smooth_mode[value]);
+    highres_config_save_int("Smooth", options_ui_smooth_mode[value]);
 }

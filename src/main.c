@@ -249,6 +249,9 @@ int main(int argc, char** argv)
 
     init_info.width = highres_config->width;
     init_info.height = highres_config->height;
+    // Local tweak: Width/Height 0 = automatic (tig video picks the size from
+    // the screen), Scale forces the factor used for it.
+    tig_video_set_scale(highres_config->scale);
     init_info.bpp = 32;
     init_info.art_file_path_resolver = name_resolve_path;
     init_info.art_id_reset_func = name_normalize_aid;
@@ -285,7 +288,10 @@ int main(int argc, char** argv)
     }
 
     // Local tweak: optional xBR upscale filter (toggle in game with F9).
-    tig_video_set_smooth(highres_config->smooth);
+    // Smooth=-1 (the default): the best filter this build has.
+    tig_video_set_smooth(highres_config->smooth >= 0
+            ? highres_config->smooth
+            : (tig_video_has_xbrz() ? 2 : 1));
     tig_video_set_smooth_ui(highres_config->smooth_ui);
 
     screenshotter.key = SDL_SCANCODE_F12;
