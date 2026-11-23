@@ -10,6 +10,7 @@
 
 #include <tig/tig.h>
 
+#include "tig/gamepad.h"
 #include "game/ai.h"
 #include "game/anim.h"
 #include "game/combat.h"
@@ -54,6 +55,7 @@
 static void main_loop(void);
 static void handle_mouse_scroll(void);
 static void handle_wheel_pan(void);
+static void handle_gamepad_pan(void);
 static void handle_auto_save(void);
 static void handle_keyboard_scroll(void);
 static void build_cmd_line(char* dst, size_t size, int argc, char** argv);
@@ -145,6 +147,11 @@ int main(int argc, char** argv)
 
     highres_config_load();
     highres_config = highres_config_get();
+
+    // Local tweak: gamepad as a virtual mouse and keyboard (tig/gamepad.c).
+    tig_gamepad_set_enabled(highres_config->gamepad);
+    tig_gamepad_set_cursor_speed(highres_config->gamepad_cursor_speed);
+    tig_gamepad_set_pan_speed(highres_config->gamepad_pan_speed);
 
 #if SDL_PLATFORM_MACOS
     // Local tweak: Renderer=1 in HighRes/config.ini presents through Metal
@@ -766,11 +773,13 @@ void main_loop(void)
         if (intgame_mode_supports_scrolling(intgame_mode_get())) {
             handle_mouse_scroll();
             handle_wheel_pan();
+            handle_gamepad_pan();
         } else {
             // Local tweak: drop wheel deltas gathered outside map mode.
             float dx;
             float dy;
             tig_mouse_wheel_take(&dx, &dy);
+            tig_gamepad_pan_take(&dx, &dy);
         }
     }
 }
@@ -921,6 +930,32 @@ static void handle_auto_save(void)
     }
     mainmenu_ui_feedback_saving_completed();
     last_save_ms = now;
+}
+
+// Local tweak: right stick pans the map (tig/gamepad.c accumulates pixels).
+static void handle_gamepad_pan(void)
+{
+    static float rest_x;
+    static float rest_y;
+    float dx;
+    float dy;
+    int64_t px;
+    int64_t py;
+
+    tig_gamepad_pan_take(&dx, &dy);
+    if (dx == 0.0f && dy == 0.0f) {
+        return;
+    }
+
+    rest_x += dx;
+    rest_y += dy;
+    px = (int64_t)rest_x;
+    py = (int64_t)rest_y;
+    rest_x -= (float)px;
+    rest_y -= (float)py;
+    if (px != 0 || py != 0) {
+        scroll_by(px, py);
+    }
 }
 
 static void handle_wheel_pan(void)

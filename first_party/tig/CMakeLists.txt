@@ -51,6 +51,7 @@ set(SRCS
     "src/idxtable.c"
     "src/kb.c"
     "src/memory.c"
+    "src/gamepad.c"
     "src/message.c"
     "src/mouse.c"
     "src/movie.c"

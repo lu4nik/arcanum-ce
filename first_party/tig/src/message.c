@@ -3,6 +3,7 @@
 #include "tig/button.h"
 #include "tig/compat.h"
 #include "tig/core.h"
+#include "tig/gamepad.h"
 #include "tig/kb.h"
 #include "tig/memory.h"
 #include "tig/mouse.h"
@@ -108,8 +109,15 @@ void tig_message_ping(void)
         return;
     }
 
+    tig_gamepad_ping();
+
     while (SDL_PollEvent(&event)) {
         SDL_ConvertEventToRenderCoordinates(renderer, &event);
+
+        // Local tweak: gamepad as a virtual mouse and keyboard.
+        if (tig_gamepad_handle_event(&event)) {
+            continue;
+        }
 
         switch (event.type) {
         case SDL_EVENT_WINDOW_MOUSE_ENTER:

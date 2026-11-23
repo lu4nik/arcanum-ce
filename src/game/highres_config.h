@@ -18,6 +18,9 @@ typedef struct HighResConfig {
     int renderer; // Local tweak: 0 OpenGL (default), 1 Metal
     int wheel_scroll; // Local tweak: map pan per wheel unit in pixels, 0 = off, <0 = inverted
     int auto_save; // Local tweak: autosave every N real minutes into two rotating slots, 0 = off
+    bool gamepad; // Local tweak: gamepad as virtual mouse/keyboard
+    int gamepad_cursor_speed; // Local tweak: cursor px/s at full stick
+    int gamepad_pan_speed; // Local tweak: map pan px/s at full right stick
 
 } HighResConfig;
 

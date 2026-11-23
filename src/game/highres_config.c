@@ -53,6 +53,9 @@ void highres_config_reset(void)
     highres_config.renderer = 0;
     highres_config.wheel_scroll = 24;
     highres_config.auto_save = 10;
+    highres_config.gamepad = true;
+    highres_config.gamepad_cursor_speed = 900;
+    highres_config.gamepad_pan_speed = 1400;
     highres_config.scroll_fps = 35;
     highres_config.scroll_dist = 10;
     highres_config.logos = true;
@@ -137,6 +140,12 @@ void highres_config_parse_line(char* line)
         highres_config.auto_save = value >= 0 ? value : 0;
     } else if (SDL_strcasecmp(key_start, "SmoothUI") == 0) {
         highres_config.smooth_ui = value != 0;
+    } else if (SDL_strcasecmp(key_start, "Gamepad") == 0) {
+        highres_config.gamepad = value != 0;
+    } else if (SDL_strcasecmp(key_start, "GamepadCursorSpeed") == 0) {
+        highres_config.gamepad_cursor_speed = value > 0 ? value : 900;
+    } else if (SDL_strcasecmp(key_start, "GamepadPanSpeed") == 0) {
+        highres_config.gamepad_pan_speed = value > 0 ? value : 1400;
     }
 }
 
