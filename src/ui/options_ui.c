@@ -291,6 +291,12 @@ void options_ui_start(OptionsUiTab tab, tig_window_handle_t window_handle, bool 
         control_info.x = options_ui_controls_x[index];
         control_info.y = options_ui_controls_y[index];
 
+        // Local addition: the video tab has a fifth row; tighten its row
+        // spacing (75 -> 66 px) so all five fit above the board's lower edge.
+        if (tab == OPTIONS_UI_TAB_VIDEO) {
+            control_info.y = 120 + 66 * (index < 8 ? index % 4 : 4);
+        }
+
         // Query initial value.
         if (meta->getter != NULL) {
             meta->getter(&value, &(control_info.enabled));
