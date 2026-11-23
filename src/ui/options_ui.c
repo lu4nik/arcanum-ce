@@ -197,6 +197,14 @@ static bool options_ui_started;
  */
 static bool options_ui_modlist_initialized;
 
+// Local addition: the video tab's five compact rows no longer line up with
+// the empty slot frames painted into OptionsBase.ART; patch them over with
+// plain wood from the same picture and restore it when the tab closes.
+static tig_window_handle_t options_ui_window_handle;
+static bool options_ui_video_patched;
+static void options_ui_blit_base(int x, int src_y, int dst_y, int width, int height);
+static void options_ui_video_patch(bool restore);
+
 // Local addition: "Scale" / "Smoothing" choices (see options_ui_video_arrays_build).
 #define OPTIONS_UI_MAX_SCALES 8
 static char options_ui_scale_text[OPTIONS_UI_MAX_SCALES][48];
@@ -236,6 +244,11 @@ void options_ui_start(OptionsUiTab tab, tig_window_handle_t window_handle, bool 
 
     // Load control titles.
     mes_load("mes\\options_ui.mes", &options_ui_mes_file);
+
+    options_ui_window_handle = window_handle;
+    if (tab == OPTIONS_UI_TAB_VIDEO) {
+        options_ui_video_patch(false);
+    }
 
     for (index = 0; index < MAX_CONTROLS; index++) {
         meta = &(options_ui_tab_controls_meta[tab][index]);
@@ -380,6 +393,10 @@ void options_ui_close(void)
     }
 
     mes_unload(options_ui_mes_file);
+
+    if (options_ui_video_patched) {
+        options_ui_video_patch(true);
+    }
 
     options_ui_started = false;
 }
@@ -916,4 +933,61 @@ void options_ui_smooth_set(int value)
 
     tig_video_set_smooth(options_ui_smooth_mode[value]);
     highres_config_save_int("Smooth", options_ui_smooth_mode[value]);
+}
+
+// Window coordinates; OptionsBase.ART starts 41 px below the window top
+// (see cyclic_ui_draw_empty_slot) and is 800x400.
+void options_ui_blit_base(int x, int src_y, int dst_y, int width, int height)
+{
+    TigArtBlitInfo blit_info;
+    TigRect src_rect;
+    TigRect dst_rect;
+    tig_art_id_t art_id;
+
+    tig_art_interface_id_create(669, 0, 0, 0, &art_id);
+
+    src_rect.x = x;
+    src_rect.y = src_y - 41;
+    src_rect.width = width;
+    src_rect.height = height;
+
+    dst_rect.x = x;
+    dst_rect.y = dst_y;
+    dst_rect.width = width;
+    dst_rect.height = height;
+
+    blit_info.flags = 0;
+    blit_info.art_id = art_id;
+    blit_info.src_rect = &src_rect;
+    blit_info.dst_rect = &dst_rect;
+    tig_window_blit_art(options_ui_window_handle, &blit_info);
+}
+
+void options_ui_video_patch(bool restore)
+{
+    static const int columns[] = { 261, 531 };
+    static const int gaps[] = { 176, 242, 308, 374 };
+    int col;
+    int gap;
+
+    for (col = 0; col < 2; col++) {
+        if (restore) {
+            options_ui_blit_base(columns[col], 120, 120, 213, 321);
+            continue;
+        }
+
+        // Gaps between the compact rows: wood from the gap between the
+        // original first and second slots.
+        for (gap = 0; gap < 4; gap++) {
+            options_ui_blit_base(columns[col], 179, gaps[gap], 213, 10);
+        }
+    }
+
+    if (!restore) {
+        // Right column has no fifth control: cover the bottom of the
+        // original fourth slot frame with the wood below it.
+        options_ui_blit_base(531, 404, 384, 213, 20);
+    }
+
+    options_ui_video_patched = !restore;
 }
