@@ -31,7 +31,16 @@ void tig_kb_exit(void)
 // 0x52B340
 bool tig_kb_is_key_pressed(SDL_Scancode scancode)
 {
-    return SDL_GetKeyboardState(NULL)[scancode];
+    int count;
+    const bool* state = SDL_GetKeyboardState(&count);
+
+    // Local tweak: guard against keycodes passed by mistake (e.g. SDLK_LALT =
+    // 0x400000E2), which used to read far past the array and crash.
+    if ((int)scancode < 0 || (int)scancode >= count) {
+        return false;
+    }
+
+    return state[scancode];
 }
 
 // 0x52B350
