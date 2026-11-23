@@ -60,6 +60,7 @@ static bool tig_gamepad_r2_down;
 static bool tig_gamepad_guide_down;
 static bool (*tig_gamepad_sticky_fn)(void);
 static bool (*tig_gamepad_on_map_fn)(void);
+static bool (*tig_gamepad_dpad_fn)(int direction);
 static bool tig_gamepad_east_is_back;
 static bool tig_gamepad_west_is_click;
 static bool tig_gamepad_sticky_prev;
@@ -100,6 +101,11 @@ void tig_gamepad_set_pan_speed(int pixels_per_second)
     if (pixels_per_second > 0) {
         tig_gamepad_pan_speed = (float)pixels_per_second;
     }
+}
+
+void tig_gamepad_set_dpad_callback(bool (*fn)(int direction))
+{
+    tig_gamepad_dpad_fn = fn;
 }
 
 void tig_gamepad_set_on_map_callback(bool (*fn)(void))
@@ -474,6 +480,9 @@ static void tig_gamepad_button(SDL_GamepadButton button, bool down)
             tig_gamepad_r1_used = true;
         } else {
             layer = 0;
+            if (tig_gamepad_dpad_fn != NULL && tig_gamepad_dpad_fn(dpad)) {
+                break;
+            }
         }
 
         if (dpad_keys[layer][dpad] != SDL_SCANCODE_UNKNOWN) {

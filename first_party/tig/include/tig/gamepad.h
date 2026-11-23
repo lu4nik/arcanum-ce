@@ -25,6 +25,10 @@ void tig_gamepad_set_sticky_callback(bool (*fn)(void));
 // Off the map circle is "back" (Esc) and square is the right click.
 void tig_gamepad_set_on_map_callback(bool (*fn)(void));
 
+// Called for a d-pad press without modifiers (0 up, 1 right, 2 down,
+// 3 left); returns true if the game used it (e.g. to pick a dialogue reply).
+void tig_gamepad_set_dpad_callback(bool (*fn)(int direction));
+
 // Called for every SDL event; returns true if the event was a gamepad event.
 bool tig_gamepad_handle_event(const SDL_Event* event);
 

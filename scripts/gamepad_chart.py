@@ -26,9 +26,10 @@ TEXTS = {
             ('dpad:right', 'World map'),
             ('dpad:down', 'Schematics'),
             ('dpad:left', 'Inventory'),
-            ('tag:L2+dpad', 'Hotkeys 1–4, dialogue replies'),
-            ('tag:L1+dpad', 'Hotkeys 5–8'),
-            ('tag:R1+dpadv', 'Hotkeys 9 (up) / 0 (down)'),
+            ('dpad:updown', 'In a conversation: pick a reply'),
+            ('tag:L2+n1234', 'Hotkeys 1–4'),
+            ('tag:L1+n5678', 'Hotkeys 5–8'),
+            ('tag:R1+n9-0-', 'Hotkeys 9 and 0'),
             ('tag:L1', 'Tap: skills'),
             ('tag:R1', 'Tap: spells'),
             ('tag:R2', 'Combat mode'),
@@ -52,9 +53,10 @@ TEXTS = {
             ('dpad:right', 'Мапа світу'),
             ('dpad:down', 'Схеми'),
             ('dpad:left', 'Інвентар'),
-            ('tag:L2+dpad', 'Слоти 1–4, репліки в розмові'),
-            ('tag:L1+dpad', 'Слоти 5–8'),
-            ('tag:R1+dpadv', 'Слоти 9 (вгору) / 0 (вниз)'),
+            ('dpad:updown', 'У розмові: вибрати репліку'),
+            ('tag:L2+n1234', 'Слоти 1–4'),
+            ('tag:L1+n5678', 'Слоти 5–8'),
+            ('tag:R1+n9-0-', 'Слоти 9 і 0'),
             ('tag:L1', 'Натиснути: навички'),
             ('tag:R1', 'Натиснути: закляття'),
             ('tag:R2', 'Бойовий режим'),
@@ -122,11 +124,31 @@ def draw_dpad(d, cx, cy, arm):
     return cx + a
 
 
+def draw_numbered_dpad(d, cx, cy, digits):
+    # digits: up, right, down, left ('-' = unused arm)
+    a, w = 29, 12
+    base = (70, 60, 50)
+    d.rectangle((cx - w, cy - a, cx + w, cy + a), fill=base)
+    d.rectangle((cx - a, cy - w, cx + a, cy + w), fill=base)
+    f = ImageFont.truetype(FONT_DIR + 'Baskerville.ttc', 19, index=1)
+    centers = [(cx, cy - (a + w) // 2), (cx + (a + w) // 2, cy),
+               (cx, cy + (a + w) // 2), (cx - (a + w) // 2, cy)]
+    boxes = [(cx - w, cy - a, cx + w, cy - w), (cx + w, cy - w, cx + a, cy + w),
+             (cx - w, cy + w, cx + w, cy + a), (cx - a, cy - w, cx - w, cy + w)]
+    for ch, c, b in zip(digits, centers, boxes):
+        if ch != '-':
+            d.rectangle(b, fill=TITLE)
+            d.text(c, ch, font=f, fill=BG, anchor='mm')
+    return cx + a
+
+
 def draw_tag(d, x, cy, label, f):
     parts = label.split('+')
     for i, part in enumerate(parts):
         if part in ('dpad', 'dpadv'):
             x = draw_dpad(d, x + 22, cy, 'updown' if part == 'dpadv' else None) + 4
+        elif part.startswith('n') and len(part) == 5:
+            x = draw_numbered_dpad(d, x + 30, cy, part[1:]) + 4
         else:
             tw = d.textlength(part, font=f)
             d.rounded_rectangle((x, cy - 20, x + tw + 22, cy + 20), radius=10,
@@ -161,13 +183,13 @@ def main():
     d.line((W // 2 - 300, 112, W // 2 + 300, 112), fill=FRAME, width=2)
 
     ftag, ftext = font(25), font(30)
-    top, step = 175, 64
+    top, step = 160, 66
     for i, (k, s) in enumerate(t['left']):
         draw_row(d, 60, top + i * step, k, s, ftag, ftext, 190)
     for i, (k, s) in enumerate(t['right']):
         draw_row(d, 770, top + i * step, k, s, ftag, ftext, 185)
 
-    d.text((W // 2, H - 45), t['note'], font=font(22), fill=DIM, anchor='mm')
+    d.text((W // 2, H - 34), t['note'], font=font(22), fill=DIM, anchor='mm')
     img.save(out)
 
 

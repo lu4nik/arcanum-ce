@@ -526,6 +526,19 @@ int tc_handle_message(TigMessage* msg)
         return -1;
     }
 
+    // Local tweak: number keys 1-5 pick the matching option.
+    if (msg->type == TIG_MESSAGE_KEYBOARD) {
+        if (msg->data.keyboard.pressed
+            && msg->data.keyboard.scancode >= SDL_SCANCODE_1
+            && msg->data.keyboard.scancode < SDL_SCANCODE_1 + TEXT_CONVERSATION_LINES) {
+            index = msg->data.keyboard.scancode - SDL_SCANCODE_1;
+            if (tc_options[index] != NULL) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
     // Only process mouse messages.
     if (msg->type != TIG_MESSAGE_MOUSE) {
         return -1;
@@ -577,6 +590,48 @@ int tc_handle_message(TigMessage* msg)
     default:
         return -1;
     }
+}
+
+/**
+ * Local tweak: gamepad d-pad moves between options. Finds the next option
+ * after the highlighted one in the given direction (+1 down, -1 up) and
+ * returns a point on it for the cursor.
+ */
+bool tc_gamepad_step(int delta, int* x, int* y)
+{
+    int index;
+    int line_height;
+    int count;
+
+    if (tc_editor || !tc_active) {
+        return false;
+    }
+
+    index = tc_highlighted_idx;
+    if (index == -1) {
+        index = delta > 0 ? -1 : TEXT_CONVERSATION_LINES;
+    }
+
+    for (count = 0; count < TEXT_CONVERSATION_LINES; count++) {
+        index += delta;
+        if (index < 0 || index >= TEXT_CONVERSATION_LINES) {
+            // Stay on the current option at either end.
+            index = tc_highlighted_idx;
+            break;
+        }
+        if (tc_options[index] != NULL) {
+            break;
+        }
+    }
+
+    if (index < 0 || index >= TEXT_CONVERSATION_LINES || tc_options[index] == NULL) {
+        return false;
+    }
+
+    line_height = tc_intermediate_video_buffer_rect.height / TEXT_CONVERSATION_LINES;
+    *x = tc_iso_window_rect.x + tc_content_rect.x + 24;
+    *y = tc_iso_window_rect.y + tc_content_rect.y + index * line_height + line_height / 2;
+    return true;
 }
 
 /**

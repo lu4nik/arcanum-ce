@@ -35,6 +35,7 @@
 #include "game/path.h"
 #include "game/player.h"
 #include "game/proto.h"
+#include "game/tc.h"
 #include "game/roof.h"
 #include "game/script.h"
 #include "game/scroll.h"
@@ -59,6 +60,7 @@ static void handle_wheel_pan(void);
 static void handle_gamepad_pan(void);
 static bool main_gamepad_sticky(void);
 static bool main_gamepad_on_map(void);
+static bool main_gamepad_dpad(int direction);
 static void handle_auto_save(void);
 static bool main_save_to_slot(const char* name, int mes_num, const char* fallback);
 static void handle_keyboard_scroll(void);
@@ -158,6 +160,7 @@ int main(int argc, char** argv)
     tig_gamepad_set_pan_speed(highres_config->gamepad_pan_speed);
     tig_gamepad_set_sticky_callback(main_gamepad_sticky);
     tig_gamepad_set_on_map_callback(main_gamepad_on_map);
+    tig_gamepad_set_dpad_callback(main_gamepad_dpad);
 
 #if SDL_PLATFORM_MACOS
     // Local tweak: Renderer=1 in HighRes/config.ini presents through Metal
@@ -1008,6 +1011,25 @@ static void handle_auto_save(void)
 }
 
 // Local tweak: right stick pans the map (tig/gamepad.c accumulates pixels).
+// Local tweak: in a conversation the d-pad moves the cursor between replies
+// (up/down); left/right do nothing there.
+static bool main_gamepad_dpad(int direction)
+{
+    int x;
+    int y;
+
+    if (!dialog_ui_is_local_pc_in_dialog()) {
+        return false;
+    }
+
+    if ((direction == 0 || direction == 2)
+        && tc_gamepad_step(direction == 0 ? -1 : 1, &x, &y)) {
+        tig_mouse_set_position(x, y);
+    }
+
+    return true;
+}
+
 // Local tweak: gamepad circle/square change meaning off the map.
 static bool main_gamepad_on_map(void)
 {
