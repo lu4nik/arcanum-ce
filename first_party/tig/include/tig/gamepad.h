@@ -16,6 +16,11 @@ void tig_gamepad_set_enabled(bool enabled);
 void tig_gamepad_set_cursor_speed(int pixels_per_second);
 void tig_gamepad_set_pan_speed(int pixels_per_second);
 
+// Returns true while the cursor is over something worth aiming at (a map
+// object). The stick cursor briefly stops when it reaches such a target and
+// moves slower over it, so it does not overshoot while the stick is let go.
+void tig_gamepad_set_sticky_callback(bool (*fn)(void));
+
 // Called for every SDL event; returns true if the event was a gamepad event.
 bool tig_gamepad_handle_event(const SDL_Event* event);
 

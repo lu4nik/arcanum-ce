@@ -34,6 +34,8 @@
 #define PRECISION_FACTOR 0.3f
 #define QUICKLOAD_HOLD_MS 1000
 #define HINT_HOLD_MS 400
+#define STICKY_FACTOR 0.4f
+#define STICKY_STOP_MS 120
 
 static bool tig_gamepad_enabled = true;
 static float tig_gamepad_cursor_speed = 900.0f;
@@ -55,6 +57,9 @@ static bool tig_gamepad_r1_used;
 static bool tig_gamepad_l2_down;
 static bool tig_gamepad_r2_down;
 static bool tig_gamepad_guide_down;
+static bool (*tig_gamepad_sticky_fn)(void);
+static bool tig_gamepad_sticky_prev;
+static Uint64 tig_gamepad_sticky_stop_until_ms;
 static Uint64 tig_gamepad_modifier_since_ms;
 static bool tig_gamepad_hint_shown;
 static Uint64 tig_gamepad_back_down_ms;
@@ -91,6 +96,11 @@ void tig_gamepad_set_pan_speed(int pixels_per_second)
     if (pixels_per_second > 0) {
         tig_gamepad_pan_speed = (float)pixels_per_second;
     }
+}
+
+void tig_gamepad_set_sticky_callback(bool (*fn)(void))
+{
+    tig_gamepad_sticky_fn = fn;
 }
 
 bool tig_gamepad_handle_event(const SDL_Event* event)
@@ -186,9 +196,25 @@ void tig_gamepad_ping(void)
     if (x != 0.0f || y != 0.0f) {
         float mag = sqrtf(x * x + y * y);
         float speed = tig_gamepad_cursor_speed * mag * (tig_gamepad_precision ? PRECISION_FACTOR : 1.0f);
+        bool sticky = tig_gamepad_sticky_fn != NULL && tig_gamepad_sticky_fn();
+
+        // Sticky targets: stop for a moment on reaching one (unless the
+        // stick is pushed all the way, i.e. the player is sweeping past),
+        // then move slower while over it.
+        if (sticky && !tig_gamepad_sticky_prev && mag < 0.95f) {
+            tig_gamepad_sticky_stop_until_ms = SDL_GetTicks() + STICKY_STOP_MS;
+        }
+        tig_gamepad_sticky_prev = sticky;
+        if (sticky) {
+            speed *= STICKY_FACTOR;
+        }
 
         tig_set_active(true);
-        tig_gamepad_move_cursor(x * speed * dt, y * speed * dt);
+        if (SDL_GetTicks() >= tig_gamepad_sticky_stop_until_ms) {
+            tig_gamepad_move_cursor(x * speed * dt, y * speed * dt);
+        }
+    } else {
+        tig_gamepad_sticky_prev = tig_gamepad_sticky_fn != NULL && tig_gamepad_sticky_fn();
     }
 
     // Right stick: pan the map. scroll_by() moves the view content, so the

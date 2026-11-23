@@ -57,6 +57,7 @@ static void main_loop(void);
 static void handle_mouse_scroll(void);
 static void handle_wheel_pan(void);
 static void handle_gamepad_pan(void);
+static bool main_gamepad_sticky(void);
 static void handle_auto_save(void);
 static bool main_save_to_slot(const char* name, int mes_num, const char* fallback);
 static void handle_keyboard_scroll(void);
@@ -154,6 +155,7 @@ int main(int argc, char** argv)
     tig_gamepad_set_enabled(highres_config->gamepad);
     tig_gamepad_set_cursor_speed(highres_config->gamepad_cursor_speed);
     tig_gamepad_set_pan_speed(highres_config->gamepad_pan_speed);
+    tig_gamepad_set_sticky_callback(main_gamepad_sticky);
 
 #if SDL_PLATFORM_MACOS
     // Local tweak: Renderer=1 in HighRes/config.ini presents through Metal
@@ -992,6 +994,13 @@ static void handle_auto_save(void)
 }
 
 // Local tweak: right stick pans the map (tig/gamepad.c accumulates pixels).
+// Local tweak: the gamepad cursor sticks to whatever map object it is over.
+static bool main_gamepad_sticky(void)
+{
+    return intgame_mode_supports_scrolling(intgame_mode_get())
+        && object_hover_obj_get() != OBJ_HANDLE_NULL;
+}
+
 static void handle_gamepad_pan(void)
 {
     static float rest_x;
