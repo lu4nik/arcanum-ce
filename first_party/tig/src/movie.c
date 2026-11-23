@@ -7,6 +7,7 @@
 #include "tig/color.h"
 #include "tig/core.h"
 #include "tig/kb.h"
+#include "tig/mouse.h"
 #include "tig/message.h"
 #include "tig/video.h"
 #include "tig/window.h"
@@ -130,12 +131,29 @@ int tig_movie_play(const char* path, TigMovieFlags movie_flags, int sound_track)
                 key = message.data.keyboard.scancode;
                 stop = true;
             }
+            // Local tweak: a click (or gamepad cross/circle) skips too.
+            if ((movie_flags & TIG_MOVIE_IGNORE_KEYBOARD) == 0
+                && message.type == TIG_MESSAGE_MOUSE
+                && (message.data.mouse.event == TIG_MESSAGE_MOUSE_LEFT_BUTTON_DOWN
+                    || message.data.mouse.event == TIG_MESSAGE_MOUSE_RIGHT_BUTTON_DOWN)) {
+                stop = true;
+            }
         }
     }
 
     if (key != SDL_SCANCODE_UNKNOWN && key < SDL_SCANCODE_COUNT) {
         // Wait until the key is released.
         while (tig_kb_is_key_pressed(key)) {
+            tig_ping();
+        }
+    }
+
+    // Local tweak: likewise wait for a skipping click to be released, so the
+    // release does not land on the screen behind the movie.
+    {
+        TigMouseState mouse_state;
+        while (tig_mouse_get_state(&mouse_state) == TIG_OK
+            && (mouse_state.flags & (TIG_MOUSE_STATE_LEFT_MOUSE_DOWN | TIG_MOUSE_STATE_RIGHT_MOUSE_DOWN)) != 0) {
             tig_ping();
         }
     }
