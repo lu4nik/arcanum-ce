@@ -487,7 +487,9 @@ static void tig_gamepad_button(SDL_GamepadButton button, bool down)
 
 static void tig_gamepad_key(SDL_Scancode scancode, bool down)
 {
-    tig_kb_set_key(SDL_GetKeyFromScancode(scancode, SDL_KMOD_NONE, false), scancode, down);
+    // key_event = true applies SDL's "latin_letters" keycode option, so the
+    // game sees 'c', not Cyrillic 'с', with a Ukrainian layout active.
+    tig_kb_set_key(SDL_GetKeyFromScancode(scancode, SDL_KMOD_NONE, true), scancode, down);
 }
 
 static void tig_gamepad_tap(SDL_Scancode scancode)

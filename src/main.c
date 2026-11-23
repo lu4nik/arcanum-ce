@@ -419,6 +419,7 @@ void main_loop(void)
 {
     int64_t location;
     int64_t pc_obj;
+    IntgameMode mode_before_event = INTGAME_MODE_MAIN;
     tig_art_id_t art_id;
     bool enable_profiler = false;
     bool disable_profiler = false;
@@ -488,6 +489,10 @@ void main_loop(void)
                 gamelib_redraw();
             }
 
+            // Local tweak: remember the mode before the event is handled, so
+            // an Esc that just closed a window does not also open the menu.
+            mode_before_event = intgame_mode_get();
+
             intgame_process_event(&message);
 
             if (gameuilib_wants_mainmenu()) {
@@ -511,10 +516,17 @@ void main_loop(void)
                     switch (message.data.keyboard.scancode) {
                     case SDL_SCANCODE_ESCAPE: {
                         IntgameMode esc_mode = intgame_mode_get();
+                        tig_debug_printf("Esc: mode %d (before event %d), dialog %d, wmap %d\n",
+                            esc_mode, mode_before_event, dialog_ui_is_local_pc_in_dialog(), wmap_ui_is_created());
                         if (esc_mode != INTGAME_MODE_MAIN
                             && esc_mode != INTGAME_MODE_DIALOG
                             && esc_mode != INTGAME_MODE_BARTER) {
                             intgame_mode_set(INTGAME_MODE_MAIN);
+                            break;
+                        }
+                        if (mode_before_event != INTGAME_MODE_MAIN
+                            && mode_before_event != INTGAME_MODE_DIALOG
+                            && mode_before_event != INTGAME_MODE_BARTER) {
                             break;
                         }
                         if (dialog_ui_is_local_pc_in_dialog()
