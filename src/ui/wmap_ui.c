@@ -232,6 +232,7 @@ static void sub_563590(WmapCoords* a1, bool a2);
 static void wmap_ui_handle_scroll(void);
 static void wmap_ui_scroll_with_kb(int direction);
 static void wmap_ui_scroll_internal(int direction, int scale);
+static void wmap_ui_scroll_pixels(int dx, int dy);
 static void sub_563AC0(int x, int y, WmapCoords* coords);
 static void sub_563B10(int x, int y, WmapCoords* coords);
 static void sub_563C00(int x, int y, WmapCoords* coords);
@@ -3038,19 +3039,13 @@ void wmap_ui_scroll(int direction)
 // 0x563790
 void wmap_ui_scroll_internal(int direction, int scale)
 {
-    WmapInfo* wmap_info;
     int sx;
     int sy;
     int dx;
     int dy;
-    int offset_x;
-    int offset_y;
-    TigRect rect;
 
     sx = scale * wmap_ui_scroll_speed_x;
     sy = scale * wmap_ui_scroll_speed_y;
-
-    wmap_info = &(wmap_ui_mode_info[wmap_ui_mode]);
 
     dx = 0;
     dy = 0;
@@ -3085,6 +3080,33 @@ void wmap_ui_scroll_internal(int direction, int scale)
         dy = -sy;
         break;
     }
+
+    wmap_ui_scroll_pixels(dx, dy);
+}
+
+// Local tweak: gamepad right stick scrolls the open world/town map.
+void wmap_ui_gamepad_scroll(int dx, int dy)
+{
+    if (!wmap_ui_created || wmap_ui_state == WMAP_UI_STATE_MOVING) {
+        return;
+    }
+
+    // Keep steps small: the redraw below assumes modest offsets.
+    dx = SDL_clamp(dx, -40, 40);
+    dy = SDL_clamp(dy, -40, 40);
+    if (dx != 0 || dy != 0) {
+        wmap_ui_scroll_pixels(dx, dy);
+    }
+}
+
+static void wmap_ui_scroll_pixels(int dx, int dy)
+{
+    WmapInfo* wmap_info;
+    int offset_x;
+    int offset_y;
+    TigRect rect;
+
+    wmap_info = &(wmap_ui_mode_info[wmap_ui_mode]);
 
     offset_x = wmap_info->field_34;
     offset_y = wmap_info->field_38;

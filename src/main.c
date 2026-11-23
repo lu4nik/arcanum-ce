@@ -1012,6 +1012,7 @@ static void handle_auto_save(void)
 static bool main_gamepad_on_map(void)
 {
     return !mainmenu_ui_is_active()
+        && !wmap_ui_is_created()
         && intgame_mode_supports_scrolling(intgame_mode_get());
 }
 
@@ -1033,6 +1034,24 @@ static void handle_gamepad_pan(void)
 
     tig_gamepad_pan_take(&dx, &dy);
     if (dx == 0.0f && dy == 0.0f) {
+        return;
+    }
+
+    // With the world/town map open the stick scrolls the map itself (its
+    // offset grows to the right/down, the opposite of the iso pan sign).
+    if (wmap_ui_is_created()) {
+        static float map_rest_x;
+        static float map_rest_y;
+        int mx;
+        int my;
+
+        map_rest_x -= dx;
+        map_rest_y -= dy;
+        mx = (int)map_rest_x;
+        my = (int)map_rest_y;
+        map_rest_x -= (float)mx;
+        map_rest_y -= (float)my;
+        wmap_ui_gamepad_scroll(mx, my);
         return;
     }
 
