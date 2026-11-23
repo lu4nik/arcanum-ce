@@ -19,12 +19,12 @@
 //   square  [WEST]      highlight objects while held (Left Alt)
 //   triangle[NORTH]     turn-based combat on/off, end turn (Space)
 //   R2                  combat mode (R)
-//   d-pad               keys 1-4 (hotkey bar, dialogue replies)
-//   L1 + d-pad          keys 5-8;  L1 alone = skills (K)
-//   R1 + d-pad up/down  keys 9/0;  R1 alone = spells (M)
-//   L2 + cross/circle/square/triangle
-//                       inventory (I) / character (C) / world map (W) /
-//                       schematics (T)
+//   d-pad               up = character (C), right = world map (W),
+//                       down = schematics (T), left = inventory (I)
+//   L2 + d-pad          keys 1-4 (hotkey bar, dialogue replies)
+//   L1 + d-pad          keys 5-8;  L1 tap = skills (K)
+//   R1 + d-pad up/down  keys 9/0;  R1 tap = spells (M)
+//   hold L1/L2/R1 or PS shows the button chart (HighRes/gamepad.bmp)
 //   Options [START]     Esc (game menu)
 //   Create  [BACK]      quick save (F7); hold for a second = quick load (F8)
 
@@ -33,10 +33,11 @@
 #define TRIGGER_THRESHOLD 0.5f
 #define PRECISION_FACTOR 0.3f
 #define QUICKLOAD_HOLD_MS 1000
+#define HINT_HOLD_MS 400
 
 static bool tig_gamepad_enabled = true;
 static float tig_gamepad_cursor_speed = 900.0f;
-static float tig_gamepad_pan_speed = 1400.0f;
+static float tig_gamepad_pan_speed = 1100.0f;
 
 static SDL_Gamepad* tig_gamepad_pads[MAX_GAMEPADS];
 
@@ -53,7 +54,9 @@ static bool tig_gamepad_r1_down;
 static bool tig_gamepad_r1_used;
 static bool tig_gamepad_l2_down;
 static bool tig_gamepad_r2_down;
-static bool tig_gamepad_l2_combo[SDL_GAMEPAD_BUTTON_COUNT];
+static bool tig_gamepad_guide_down;
+static Uint64 tig_gamepad_modifier_since_ms;
+static bool tig_gamepad_hint_shown;
 static Uint64 tig_gamepad_back_down_ms;
 static bool tig_gamepad_back_fired;
 
@@ -195,8 +198,9 @@ void tig_gamepad_ping(void)
         float mag = sqrtf(x * x + y * y);
 
         tig_set_active(true);
-        tig_gamepad_pan_acc_x -= x * mag * tig_gamepad_pan_speed * dt;
-        tig_gamepad_pan_acc_y -= y * mag * tig_gamepad_pan_speed * dt;
+        // Cubic response: a gentle start, full speed only at full tilt.
+        tig_gamepad_pan_acc_x -= x * mag * mag * tig_gamepad_pan_speed * dt;
+        tig_gamepad_pan_acc_y -= y * mag * mag * tig_gamepad_pan_speed * dt;
     }
 
     // Triggers behave like buttons.
@@ -211,6 +215,25 @@ void tig_gamepad_ping(void)
         if (r2) {
             tig_set_active(true);
             tig_gamepad_tap(SDL_SCANCODE_R);
+        }
+    }
+
+    // Holding a modifier (or PS) for a moment shows the button chart.
+    {
+        bool modifier = tig_gamepad_l1_down || tig_gamepad_l2_down || tig_gamepad_r1_down;
+        bool hint;
+
+        if (!modifier) {
+            tig_gamepad_modifier_since_ms = 0;
+        } else if (tig_gamepad_modifier_since_ms == 0) {
+            tig_gamepad_modifier_since_ms = SDL_GetTicks();
+        }
+
+        hint = tig_gamepad_guide_down
+            || (modifier && SDL_GetTicks() - tig_gamepad_modifier_since_ms >= HINT_HOLD_MS);
+        if (hint != tig_gamepad_hint_shown) {
+            tig_gamepad_hint_shown = hint;
+            tig_video_set_overlay_visible(hint);
         }
     }
 
@@ -286,48 +309,15 @@ static void tig_gamepad_close(SDL_JoystickID id)
 
 static void tig_gamepad_button(SDL_GamepadButton button, bool down)
 {
-    static const SDL_Scancode dpad_keys[3][4] = {
+    static const SDL_Scancode dpad_keys[4][4] = {
         // up, right, down, left
+        { SDL_SCANCODE_C, SDL_SCANCODE_W, SDL_SCANCODE_T, SDL_SCANCODE_I },
         { SDL_SCANCODE_1, SDL_SCANCODE_2, SDL_SCANCODE_3, SDL_SCANCODE_4 },
         { SDL_SCANCODE_5, SDL_SCANCODE_6, SDL_SCANCODE_7, SDL_SCANCODE_8 },
         { SDL_SCANCODE_9, SDL_SCANCODE_UNKNOWN, SDL_SCANCODE_0, SDL_SCANCODE_UNKNOWN },
     };
     int dpad;
     int layer;
-
-    // L2 + face button: open a screen. Remember which buttons started as a
-    // combo so their release is swallowed even if L2 was let go first.
-    if (down && tig_gamepad_l2_down) {
-        SDL_Scancode combo = SDL_SCANCODE_UNKNOWN;
-
-        switch (button) {
-        case SDL_GAMEPAD_BUTTON_SOUTH:
-            combo = SDL_SCANCODE_I;
-            break;
-        case SDL_GAMEPAD_BUTTON_EAST:
-            combo = SDL_SCANCODE_C;
-            break;
-        case SDL_GAMEPAD_BUTTON_WEST:
-            combo = SDL_SCANCODE_W;
-            break;
-        case SDL_GAMEPAD_BUTTON_NORTH:
-            combo = SDL_SCANCODE_T;
-            break;
-        default:
-            break;
-        }
-
-        if (combo != SDL_SCANCODE_UNKNOWN) {
-            tig_gamepad_l2_combo[button] = true;
-            tig_gamepad_tap(combo);
-            return;
-        }
-    }
-
-    if (!down && tig_gamepad_l2_combo[button]) {
-        tig_gamepad_l2_combo[button] = false;
-        return;
-    }
 
     switch (button) {
     case SDL_GAMEPAD_BUTTON_SOUTH:
@@ -361,6 +351,9 @@ static void tig_gamepad_button(SDL_GamepadButton button, bool down)
             tig_gamepad_back_down_ms = 0;
         }
         break;
+    case SDL_GAMEPAD_BUTTON_GUIDE:
+        tig_gamepad_guide_down = down;
+        break;
     case SDL_GAMEPAD_BUTTON_LEFT_STICK:
         tig_gamepad_precision = down;
         break;
@@ -374,7 +367,7 @@ static void tig_gamepad_button(SDL_GamepadButton button, bool down)
             tig_gamepad_l1_down = true;
             tig_gamepad_l1_used = false;
         } else {
-            if (tig_gamepad_l1_down && !tig_gamepad_l1_used) {
+            if (tig_gamepad_l1_down && !tig_gamepad_l1_used && !tig_gamepad_hint_shown) {
                 tig_gamepad_tap(SDL_SCANCODE_K);
             }
             tig_gamepad_l1_down = false;
@@ -385,7 +378,7 @@ static void tig_gamepad_button(SDL_GamepadButton button, bool down)
             tig_gamepad_r1_down = true;
             tig_gamepad_r1_used = false;
         } else {
-            if (tig_gamepad_r1_down && !tig_gamepad_r1_used) {
+            if (tig_gamepad_r1_down && !tig_gamepad_r1_used && !tig_gamepad_hint_shown) {
                 tig_gamepad_tap(SDL_SCANCODE_M);
             }
             tig_gamepad_r1_down = false;
@@ -414,11 +407,13 @@ static void tig_gamepad_button(SDL_GamepadButton button, bool down)
             break;
         }
 
-        if (tig_gamepad_l1_down) {
+        if (tig_gamepad_l2_down) {
             layer = 1;
+        } else if (tig_gamepad_l1_down) {
+            layer = 2;
             tig_gamepad_l1_used = true;
         } else if (tig_gamepad_r1_down) {
-            layer = 2;
+            layer = 3;
             tig_gamepad_r1_used = true;
         } else {
             layer = 0;

@@ -244,6 +244,64 @@ int tig_video_fill(const TigRect* rect, tig_color_t color)
 // Local tweak: optional xBR 3x upscale of the final frame.
 static int tig_video_smooth;
 static int tig_video_smooth_label_frames;
+
+// Local tweak: gamepad button chart drawn over the game while visible.
+static bool tig_video_overlay_visible;
+static SDL_Texture* tig_video_overlay_texture;
+static bool tig_video_overlay_failed;
+
+void tig_video_set_overlay_visible(bool visible)
+{
+    tig_video_overlay_visible = visible;
+}
+
+static void tig_video_overlay_draw(void)
+{
+    SDL_Renderer* renderer = tig_video_state.renderer;
+    int lw;
+    int lh;
+    int ow;
+    int oh;
+    float scale;
+    SDL_FRect dst;
+    SDL_RendererLogicalPresentation mode;
+
+    if (!tig_video_overlay_visible || tig_video_overlay_failed) {
+        return;
+    }
+
+    if (tig_video_overlay_texture == NULL) {
+        SDL_Surface* surface = SDL_LoadBMP("HighRes/gamepad.bmp");
+        if (surface == NULL) {
+            tig_debug_printf("TIG Video: no gamepad chart: %s\n", SDL_GetError());
+            tig_video_overlay_failed = true;
+            return;
+        }
+        tig_video_overlay_texture = SDL_CreateTextureFromSurface(renderer, surface);
+        SDL_DestroySurface(surface);
+        if (tig_video_overlay_texture == NULL) {
+            tig_video_overlay_failed = true;
+            return;
+        }
+        SDL_SetTextureScaleMode(tig_video_overlay_texture, SDL_SCALEMODE_LINEAR);
+        SDL_SetTextureAlphaMod(tig_video_overlay_texture, 235);
+    }
+
+    // Draw in output pixels so the chart stays sharp whatever the game's
+    // logical resolution is.
+    SDL_GetRenderLogicalPresentation(renderer, &lw, &lh, &mode);
+    SDL_SetRenderLogicalPresentation(renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+    if (SDL_GetCurrentRenderOutputSize(renderer, &ow, &oh)) {
+        scale = SDL_min((float)ow * 0.9f / (float)tig_video_overlay_texture->w,
+            (float)oh * 0.9f / (float)tig_video_overlay_texture->h);
+        dst.w = (float)tig_video_overlay_texture->w * scale;
+        dst.h = (float)tig_video_overlay_texture->h * scale;
+        dst.x = ((float)ow - dst.w) / 2.0f;
+        dst.y = ((float)oh - dst.h) / 2.0f;
+        SDL_RenderTexture(renderer, tig_video_overlay_texture, NULL, &dst);
+    }
+    SDL_SetRenderLogicalPresentation(renderer, lw, lh, mode);
+}
 static bool tig_video_smooth_ui = true;
 
 void tig_video_set_smooth_ui(bool enabled)
@@ -545,6 +603,8 @@ int tig_video_flip(void)
         SDL_SetRenderDrawColor(tig_video_state.renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
         SDL_RenderDebugText(tig_video_state.renderer, 8, 16, labels[tig_video_smooth % 4]);
     }
+
+    tig_video_overlay_draw();
 
     if (tig_video_show_fps) {
         SDL_SetRenderDrawColor(tig_video_state.renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);

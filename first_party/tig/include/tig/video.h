@@ -117,6 +117,10 @@ int tig_video_flip(void);
 void tig_video_set_smooth(int mode);
 int tig_video_get_smooth(void);
 bool tig_video_has_xbrz(void);
+
+// Local tweak: show/hide the gamepad button chart (HighRes/gamepad.bmp)
+// on top of the game.
+void tig_video_set_overlay_visible(bool visible);
 void tig_video_set_scale(int percent);
 void tig_video_logical_size_for(int pixel_width, int pixel_height, int percent, int* width_ptr, int* height_ptr);
 bool tig_video_screen_pixels(int* width_ptr, int* height_ptr);
