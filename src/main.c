@@ -12,6 +12,7 @@
 
 #include "tig/gamepad.h"
 #include "game/ai.h"
+#include "game/mes.h"
 #include "game/anim.h"
 #include "game/combat.h"
 #include "game/critter.h"
@@ -57,6 +58,7 @@ static void handle_mouse_scroll(void);
 static void handle_wheel_pan(void);
 static void handle_gamepad_pan(void);
 static void handle_auto_save(void);
+static bool main_save_to_slot(const char* name, int mes_num, const char* fallback);
 static void handle_keyboard_scroll(void);
 static void build_cmd_line(char* dst, size_t size, int argc, char** argv);
 
@@ -552,7 +554,7 @@ void main_loop(void)
                                 intgame_mode_set(INTGAME_MODE_MAIN);
                                 intgame_mode_set(INTGAME_MODE_MAIN);
                                 mainmenu_ui_feedback_saving();
-                                gamelib_save("SlotAuto", "Auto-Save");
+                                main_save_to_slot("SlotAuto", 5057, "Quick Save");
                                 mainmenu_ui_feedback_saving_completed();
                             } else {
                                 mainmenu_ui_feedback_cannot_save_in_tb();
@@ -889,6 +891,57 @@ void build_cmd_line(char* dst, size_t size, int argc, char** argv)
  * moment: on the map, out of combat, no menu/dialog/world map, PC alive. If
  * the moment is not calm, it retries on the next frame.
  */
+// Local tweak: quick save (F7) and the rotating autosaves used to be labelled
+// "Auto-Save" alike. Label them from mainmenu.mes (5057 Quick Save, 5056 Auto
+// Save, translated with the game) plus the real time, so they can be told
+// apart. The .gsi file name includes the label, so the slot's old .gsi files
+// are removed first; otherwise the list would show stale duplicates.
+static bool main_save_to_slot(const char* name, int mes_num, const char* fallback)
+{
+    static mes_file_handle_t mainmenu_mes = MES_FILE_HANDLE_INVALID;
+    static bool mainmenu_mes_tried;
+    MesFileEntry mes_file_entry;
+    const char* label = fallback;
+    char description[64];
+    char pattern[TIG_MAX_PATH];
+    char path[TIG_MAX_PATH];
+    TigFindFileData find_file_data;
+    SDL_Time now;
+    SDL_DateTime dt;
+
+    if (!mainmenu_mes_tried) {
+        mainmenu_mes_tried = true;
+        if (!mes_load("mes\\mainmenu.mes", &mainmenu_mes)) {
+            mainmenu_mes = MES_FILE_HANDLE_INVALID;
+        }
+    }
+
+    if (mainmenu_mes != MES_FILE_HANDLE_INVALID) {
+        mes_file_entry.num = mes_num;
+        if (mes_search(mainmenu_mes, &mes_file_entry) && mes_file_entry.str[0] != '\0') {
+            label = mes_file_entry.str;
+        }
+    }
+
+    // No ':' in the time: the label becomes part of a file name.
+    if (SDL_GetCurrentTime(&now) && SDL_TimeToDateTime(now, &dt, true)) {
+        snprintf(description, sizeof(description), "%s, %02d.%02d", label, dt.hour, dt.minute);
+    } else {
+        snprintf(description, sizeof(description), "%s", label);
+    }
+
+    snprintf(pattern, sizeof(pattern), "save\\%s*.gsi", name);
+    if (tig_find_first_file(pattern, &find_file_data)) {
+        do {
+            snprintf(path, sizeof(path), "save\\%s", find_file_data.name);
+            tig_file_remove(path);
+        } while (tig_find_next_file(&find_file_data));
+    }
+    tig_find_close(&find_file_data);
+
+    return gamelib_save(name, description);
+}
+
 static void handle_auto_save(void)
 {
     static Uint64 last_save_ms;
@@ -925,7 +978,7 @@ static void handle_auto_save(void)
     }
 
     mainmenu_ui_feedback_saving();
-    if (gamelib_save(next_slot == 0 ? "SlotAut1" : "SlotAut2", "Auto-Save")) {
+    if (main_save_to_slot(next_slot == 0 ? "SlotAut1" : "SlotAut2", 5056, "Auto Save")) {
         next_slot = 1 - next_slot;
     }
     mainmenu_ui_feedback_saving_completed();

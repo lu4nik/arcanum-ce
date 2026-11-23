@@ -1416,20 +1416,9 @@ int game_save_entry_compare_by_date(const void* va, const void* vb)
     const GameSaveEntry* a = (const GameSaveEntry*)va;
     const GameSaveEntry* b = (const GameSaveEntry*)vb;
 
-    if (gamelib_savelist_sort_check_autosave) {
-        // Local tweak: several auto slots may exist; between them fall
-        // through to the date order.
-        bool a_auto = SDL_toupper(a->path[4]) == 'A';
-        bool b_auto = SDL_toupper(b->path[4]) == 'A';
-
-        if (a_auto && !b_auto) {
-            return -1;
-        }
-
-        if (b_auto && !a_auto) {
-            return 1;
-        }
-    }
+    // Local tweak: quick and auto saves are no longer pinned to the top of
+    // the list; everything is ordered by date (they carry their own labels).
+    (void)gamelib_savelist_sort_check_autosave;
 
     if (a->modify_time < b->modify_time) {
         return 1;
