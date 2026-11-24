@@ -61,6 +61,7 @@ static void handle_gamepad_pan(void);
 static bool main_gamepad_sticky(void);
 static bool main_gamepad_on_map(void);
 static bool main_gamepad_dpad(int direction);
+static int main_gamepad_targets(TigRect* rects, int max);
 static void handle_auto_save(void);
 static bool main_save_to_slot(const char* name, int mes_num, const char* fallback);
 static void handle_keyboard_scroll(void);
@@ -161,6 +162,7 @@ int main(int argc, char** argv)
     tig_gamepad_set_sticky_callback(main_gamepad_sticky);
     tig_gamepad_set_on_map_callback(main_gamepad_on_map);
     tig_gamepad_set_dpad_callback(main_gamepad_dpad);
+    tig_gamepad_set_targets_callback(main_gamepad_targets);
 
 #if SDL_PLATFORM_MACOS
     // Local tweak: Renderer=1 in HighRes/config.ini presents through Metal
@@ -1018,6 +1020,10 @@ static bool main_gamepad_dpad(int direction)
     int x;
     int y;
 
+    if (mainmenu_ui_is_active() && mainmenu_ui_gamepad_list_step(direction)) {
+        return true;
+    }
+
     if (!dialog_ui_is_local_pc_in_dialog()) {
         return false;
     }
@@ -1028,6 +1034,16 @@ static bool main_gamepad_dpad(int direction)
     }
 
     return true;
+}
+
+// Local tweak: clickable things that are not tig buttons (list rows...).
+static int main_gamepad_targets(TigRect* rects, int max)
+{
+    if (mainmenu_ui_is_active()) {
+        return mainmenu_ui_gamepad_targets(rects, max);
+    }
+
+    return 0;
 }
 
 // Local tweak: gamepad circle/square change meaning off the map.

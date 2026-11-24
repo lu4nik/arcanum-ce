@@ -353,6 +353,24 @@ void tig_gamepad_ping(void)
     // Right stick: pan the map. scroll_by() moves the view content, so the
     // signs are inverted: stick right = look right = content moves left.
     tig_gamepad_stick(SDL_GAMEPAD_AXIS_RIGHTX, SDL_GAMEPAD_AXIS_RIGHTY, &x, &y);
+    if ((x != 0.0f || y != 0.0f)
+        && tig_gamepad_on_map_fn != NULL
+        && !tig_gamepad_on_map_fn()) {
+        // In windows the right stick is a mouse wheel (lists, text).
+        static float wheel_rest;
+        int steps;
+
+        tig_gamepad_in_use = true;
+        tig_set_active(true);
+        wheel_rest += -y * fabsf(y) * 12.0f * dt;
+        steps = (int)wheel_rest;
+        if (steps != 0) {
+            wheel_rest -= (float)steps;
+            tig_mouse_wheel(0, steps);
+        }
+    }
+    // The pan is always gathered: the game uses it on the map and for the
+    // open world/town map, and drops it elsewhere.
     if (x != 0.0f || y != 0.0f) {
         float mag = sqrtf(x * x + y * y);
 

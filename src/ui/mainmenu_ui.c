@@ -6084,3 +6084,96 @@ void sub_549A80(void)
         }
     }
 }
+
+// Local tweak: gamepad support for the save/load lists (their rows are not
+// tig buttons, so the d-pad focus navigation cannot see them by itself).
+static bool mainmenu_ui_gamepad_list(MainMenuWindowInfo** window_ptr, TigRect* screen_rect, int* rows_ptr)
+{
+    MainMenuWindowInfo* window;
+    TigRect rect = { 0, 0, 800, 600 };
+
+    if (!mainmenu_ui_active || slide_ui_is_active()) {
+        return false;
+    }
+
+    window = main_menu_window_info[mainmenu_ui_window_type];
+    if (window == NULL
+        || window->mouse_up_func == NULL
+        || window->content_rect.width <= 0
+        || window->content_rect.height < 20
+        || window->cnt <= 0) {
+        return false;
+    }
+
+    hrp_apply(&rect, GRAVITY_CENTER_HORIZONTAL | GRAVITY_CENTER_VERTICAL);
+    screen_rect->x = rect.x + window->content_rect.x;
+    screen_rect->y = rect.y + mainmenu_ui_window_rect.y + window->content_rect.y;
+    screen_rect->width = window->content_rect.width;
+    screen_rect->height = window->content_rect.height;
+    *rows_ptr = window->content_rect.height / 20;
+    *window_ptr = window;
+    return true;
+}
+
+int mainmenu_ui_gamepad_targets(TigRect* rects, int max)
+{
+    MainMenuWindowInfo* window;
+    TigRect list;
+    int rows;
+    int row;
+    int count = 0;
+
+    if (!mainmenu_ui_gamepad_list(&window, &list, &rows)) {
+        return 0;
+    }
+
+    for (row = 0; row < rows && window->top_index + row < window->cnt && count < max; row++) {
+        rects[count].x = list.x + 40;
+        rects[count].y = list.y + row * 20 + 10;
+        rects[count].width = list.width;
+        rects[count].height = 20;
+        count++;
+    }
+
+    return count;
+}
+
+bool mainmenu_ui_gamepad_list_step(int direction)
+{
+    MainMenuWindowInfo* window;
+    TigMouseState mouse_state;
+    TigRect list;
+    int rows;
+    int index;
+    int top;
+
+    if ((direction != 0 && direction != 2)
+        || !mainmenu_ui_gamepad_list(&window, &list, &rows)
+        || tig_mouse_get_state(&mouse_state) != TIG_OK
+        || mouse_state.x < list.x
+        || mouse_state.x >= list.x + list.width
+        || mouse_state.y < list.y
+        || mouse_state.y >= list.y + list.height) {
+        return false;
+    }
+
+    index = window->top_index + (mouse_state.y - list.y) / 20 + (direction == 0 ? -1 : 1);
+    if (index < 0 || index >= window->cnt) {
+        // Past either end: let the focus navigation leave the list.
+        return false;
+    }
+
+    top = window->top_index;
+    if (index < top) {
+        top = index;
+    } else if (index >= top + rows) {
+        top = index - rows + 1;
+    }
+    if (top != window->top_index) {
+        scrollbar_ui_control_set(stru_64C220, SCROLLBAR_CURRENT_VALUE, top);
+        window->refresh_func(NULL);
+    }
+
+    tig_mouse_set_position(list.x + 40, list.y + (index - window->top_index) * 20 + 10);
+    return true;
+}

@@ -69,6 +69,8 @@ void mainmenu_ui_start(MainMenuType type);
 void sub_5412D0(void);
 bool mainmenu_ui_handle(void);
 bool mainmenu_ui_is_active(void);
+int mainmenu_ui_gamepad_targets(TigRect* rects, int max);
+bool mainmenu_ui_gamepad_list_step(int direction);
 TigWindowModalDialogChoice mainmenu_ui_confirm_quit(void);
 void mainmenu_ui_reset(void);
 void mainmenu_ui_open(void);
