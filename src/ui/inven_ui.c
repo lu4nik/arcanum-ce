@@ -4607,3 +4607,102 @@ void sub_579E30(TigRect* rect)
     blit_info.dst_rect = rect;
     tig_window_blit_art(inven_ui_window_handle, &blit_info);
 }
+
+// Local tweak: gamepad focus targets for the inventory screens. Items are not
+// tig buttons, so the screen is sampled on a fine grid with the same
+// item-under-cursor lookup the mouse uses; every distinct item becomes one
+// target (at the middle of its sampled area). In the player's inventory the
+// paperdoll slots are targets too, so things can be dragged onto them.
+int inven_ui_gamepad_targets(TigRect* rects, int max)
+{
+    enum { MAX_ITEMS = 128, STEP = 8 };
+    int64_t items[MAX_ITEMS];
+    int sum_x[MAX_ITEMS];
+    int sum_y[MAX_ITEMS];
+    int hits[MAX_ITEMS];
+    int min_x[MAX_ITEMS];
+    int min_y[MAX_ITEMS];
+    int max_x[MAX_ITEMS];
+    int max_y[MAX_ITEMS];
+    int num_items = 0;
+    int count = 0;
+    int x;
+    int y;
+    int index;
+    int64_t parent_obj;
+    int64_t item_obj;
+    TigRect origin = { 0, 0, 800, 600 };
+
+    if (!inven_ui_created) {
+        return 0;
+    }
+
+    hrp_apply(&origin, GRAVITY_CENTER_HORIZONTAL | GRAVITY_CENTER_VERTICAL);
+
+    for (y = STEP / 2; y < 600; y += STEP) {
+        for (x = STEP / 2; x < 800; x += STEP) {
+            item_obj = sub_575FA0(x, y, &parent_obj);
+            if (item_obj == OBJ_HANDLE_NULL) {
+                continue;
+            }
+
+            for (index = 0; index < num_items; index++) {
+                if (items[index] == item_obj) {
+                    break;
+                }
+            }
+
+            if (index == num_items) {
+                if (num_items == MAX_ITEMS) {
+                    continue;
+                }
+                items[index] = item_obj;
+                sum_x[index] = 0;
+                sum_y[index] = 0;
+                hits[index] = 0;
+                min_x[index] = x;
+                min_y[index] = y;
+                max_x[index] = x;
+                max_y[index] = y;
+                num_items++;
+            }
+
+            sum_x[index] += x;
+            sum_y[index] += y;
+            hits[index]++;
+            min_x[index] = SDL_min(min_x[index], x);
+            min_y[index] = SDL_min(min_y[index], y);
+            max_x[index] = SDL_max(max_x[index], x);
+            max_y[index] = SDL_max(max_y[index], y);
+        }
+    }
+
+    for (index = 0; index < num_items && count < max; index++) {
+        rects[count].x = origin.x + sum_x[index] / hits[index];
+        rects[count].y = origin.y + sum_y[index] / hits[index];
+        rects[count].width = max_x[index] - min_x[index] + STEP;
+        rects[count].height = max_y[index] - min_y[index] + STEP;
+        count++;
+    }
+
+    // Empty paperdoll slots of the player's own inventory.
+    if (inven_ui_mode == INVEN_UI_MODE_INVENTORY) {
+        for (index = 0; index < 9 && count < max; index++) {
+            TigRect* slot = &(inven_ui_inventory_paperdoll_inv_slot_rects[index]);
+            int cx = slot->x + slot->width / 2;
+            int cy = slot->y + 41 + slot->height / 2;
+
+            if (sub_575FA0(cx, cy, &parent_obj) != OBJ_HANDLE_NULL) {
+                continue;
+            }
+
+            rects[count].x = origin.x + cx;
+            rects[count].y = origin.y + cy;
+            rects[count].width = slot->width;
+            rects[count].height = slot->height;
+            count++;
+        }
+    }
+
+    return count;
+}

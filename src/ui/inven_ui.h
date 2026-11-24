@@ -41,4 +41,6 @@ void sub_578B80(int a1);
 bool sub_578EA0(Packet81* pkt);
 int64_t sub_579760(void);
 
+int inven_ui_gamepad_targets(TigRect* rects, int max);
+
 #endif /* ARCANUM_UI_INVEN_UI_H_ */

@@ -48,6 +48,7 @@
 #include "ui/dialog_ui.h"
 #include "ui/gameuilib.h"
 #include "ui/intgame.h"
+#include "ui/inven_ui.h"
 #include "ui/iso.h"
 #include "ui/logbook_ui.h"
 #include "ui/mainmenu_ui.h"
@@ -1191,7 +1192,7 @@ static int main_gamepad_targets(TigRect* rects, int max)
         return mainmenu_ui_gamepad_targets(rects, max);
     }
 
-    return 0;
+    return inven_ui_gamepad_targets(rects, max);
 }
 
 // Local tweak: gamepad circle/square change meaning off the map.
