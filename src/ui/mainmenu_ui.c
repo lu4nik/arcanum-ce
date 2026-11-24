@@ -3104,7 +3104,16 @@ bool mainmenu_ui_save_game_execute(int btn)
     }
 
     if (mainmenu_ui_textedit_buffer[0] == '\0') {
-        strcpy(mainmenu_ui_textedit_buffer, name);
+        // Local tweak: an unnamed save (e.g. made with a gamepad, nothing to
+        // type with) is labelled with the date and time, not "Slot0012".
+        SDL_Time now;
+        SDL_DateTime dt;
+        if (SDL_GetCurrentTime(&now) && SDL_TimeToDateTime(now, &dt, true)) {
+            snprintf(mainmenu_ui_textedit_buffer, sizeof(mainmenu_ui_textedit_buffer),
+                "%02d.%02d, %02d.%02d", dt.day, dt.month, dt.hour, dt.minute);
+        } else {
+            strcpy(mainmenu_ui_textedit_buffer, name);
+        }
     }
 
     if (!gamelib_save(name, mainmenu_ui_textedit_buffer)) {
