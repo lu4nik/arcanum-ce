@@ -22,25 +22,26 @@ TEXTS = {
         'title': 'Gamepad controls',
         'note': 'Hold L1, L2, R1 or PS to see this chart',
         'left': [
-            ('dpad:up', 'Character'),
-            ('dpad:right', 'World map'),
-            ('dpad:down', 'Schematics'),
-            ('dpad:left', 'Inventory'),
-            ('dpad:updown', 'In a conversation: pick a reply'),
+            ('dpad:up', 'Map: character'),
+            ('dpad:right', 'Map: world map'),
+            ('dpad:down', 'Map: schematics'),
+            ('dpad:left', 'Map: inventory'),
+            ('dpad:all', 'Windows: to the next button or item'),
+            ('dpad:updown', 'Conversation: pick a reply'),
             ('tag:L2+n1234', 'Hotkeys 1–4'),
             ('tag:L1+n5678', 'Hotkeys 5–8'),
             ('tag:R1+n9-0-', 'Hotkeys 9 and 0'),
-            ('tag:L1', 'Tap: skills'),
-            ('tag:R1', 'Tap: spells'),
+            ('tag:L1', 'Tap: skills  (R1: spells)'),
             ('tag:R2', 'Combat mode'),
         ],
         'right': [
             ('btn:cross', 'Left click (touchpad too)'),
             ('btn:circle', 'Map: right click; windows: back'),
-            ('btn:square', 'Map: highlight; windows: right click'),
+            ('btn:square', 'Map tap: snap to the nearest object'),
+            ('btn:square', 'Hold: highlight; windows: right click'),
             ('btn:triangle', 'Turn-based mode / end turn'),
             ('tag:L stick', 'Cursor; hold pressed: precise'),
-            ('tag:R stick', 'Look around; press: back to hero'),
+            ('tag:R stick', 'Look around / scroll; press: hero'),
             ('tag:Options', 'Game menu'),
             ('tag:Create', 'Quick save; hold: quick load'),
         ],
@@ -49,25 +50,26 @@ TEXTS = {
         'title': 'Керування геймпадом',
         'note': 'Утримуйте L1, L2, R1 або PS, щоб побачити цю схему',
         'left': [
-            ('dpad:up', 'Персонаж'),
-            ('dpad:right', 'Мапа світу'),
-            ('dpad:down', 'Схеми'),
-            ('dpad:left', 'Інвентар'),
-            ('dpad:updown', 'У розмові: вибрати репліку'),
+            ('dpad:up', 'Мапа: персонаж'),
+            ('dpad:right', 'Мапа: мапа світу'),
+            ('dpad:down', 'Мапа: схеми'),
+            ('dpad:left', 'Мапа: інвентар'),
+            ('dpad:all', 'Вікна: до сусідньої кнопки чи речі'),
+            ('dpad:updown', 'Розмова: вибрати репліку'),
             ('tag:L2+n1234', 'Слоти 1–4'),
             ('tag:L1+n5678', 'Слоти 5–8'),
             ('tag:R1+n9-0-', 'Слоти 9 і 0'),
-            ('tag:L1', 'Натиснути: навички'),
-            ('tag:R1', 'Натиснути: закляття'),
+            ('tag:L1', 'Навички  (R1: закляття)'),
             ('tag:R2', 'Бойовий режим'),
         ],
         'right': [
             ('btn:cross', 'Лівий клік (і тачпад)'),
             ('btn:circle', 'Мапа: правий клік; вікна: назад'),
-            ('btn:square', 'Мапа: підсвітка; вікна: правий клік'),
+            ('btn:square', 'Мапа: курсор на найближчий об’єкт'),
+            ('btn:square', 'Тримати: підсвітка; вікна: правий клік'),
             ('btn:triangle', 'Покроковий бій / кінець ходу'),
             ('tag:Лівий стік', 'Курсор; затиснути — точно'),
-            ('tag:Правий стік', 'Огляд мапи; натиснути — до героя'),
+            ('tag:Правий стік', 'Огляд / прокрутка; натиснути — герой'),
             ('tag:Options', 'Меню гри'),
             ('tag:Create', 'Швидке збереження; тримати — завантажити'),
         ],
@@ -110,7 +112,10 @@ def draw_dpad(d, cx, cy, arm):
     hi = TITLE
     d.rectangle((cx - w, cy - a, cx + w, cy + a), fill=base)
     d.rectangle((cx - a, cy - w, cx + a, cy + w), fill=base)
-    if arm == 'updown':
+    if arm == 'all':
+        d.rectangle((cx - w, cy - a, cx + w, cy + a), fill=hi)
+        d.rectangle((cx - a, cy - w, cx + a, cy + w), fill=hi)
+    elif arm == 'updown':
         d.rectangle((cx - w, cy - a, cx + w, cy - w), fill=hi)
         d.rectangle((cx - w, cy + w, cx + w, cy + a), fill=hi)
     elif arm == 'up':
