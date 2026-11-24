@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <SDL3/SDL_main.h>
 
@@ -61,7 +62,10 @@ static void handle_gamepad_pan(void);
 static bool main_gamepad_sticky(void);
 static bool main_gamepad_on_map(void);
 static bool main_gamepad_dpad(int direction);
+static int main_iso_width = 800;
+static int main_iso_height = 600;
 static int main_gamepad_targets(TigRect* rects, int max);
+static void main_gamepad_next_target(void);
 static void handle_auto_save(void);
 static bool main_save_to_slot(const char* name, int mes_num, const char* fallback);
 static void handle_keyboard_scroll(void);
@@ -163,6 +167,7 @@ int main(int argc, char** argv)
     tig_gamepad_set_on_map_callback(main_gamepad_on_map);
     tig_gamepad_set_dpad_callback(main_gamepad_dpad);
     tig_gamepad_set_targets_callback(main_gamepad_targets);
+    tig_gamepad_set_cycle_callback(main_gamepad_next_target);
 
 #if SDL_PLATFORM_MACOS
     // Local tweak: Renderer=1 in HighRes/config.ini presents through Metal
@@ -309,6 +314,8 @@ int main(int argc, char** argv)
 
     intgame_set_iso_window_width(init_info.width);
     intgame_set_iso_window_height(init_info.height);
+    main_iso_width = init_info.width;
+    main_iso_height = init_info.height;
     if (!intgame_create_iso_window(&(game_init_info.iso_window_handle))) {
         tig_exit();
         return EXIT_SUCCESS; // FIXME: Should be `EXIT_FAILURE`.
@@ -1034,6 +1041,147 @@ static bool main_gamepad_dpad(int direction)
     }
 
     return true;
+}
+
+// Local tweak: square tap on the map puts the cursor on the nearest thing
+// worth interacting with: people, doors, containers, items, small scenery
+// (signs; big scenery like trees is skipped). "Nearest" is measured from
+// where the cursor was at the first tap, so pointing roughly at something
+// and tapping snaps onto it; quick repeated taps walk on to the next
+// nearest. Followers, the dead and scenery count as farther away.
+#define GAMEPAD_MAX_TARGETS 128
+
+typedef struct MainGamepadTarget {
+    int64_t obj;
+    int x;
+    int y;
+    int dist;
+} MainGamepadTarget;
+
+static int main_gamepad_target_compare(const void* a, const void* b)
+{
+    return ((const MainGamepadTarget*)a)->dist - ((const MainGamepadTarget*)b)->dist;
+}
+
+static void main_gamepad_next_target(void)
+{
+    static int64_t last_obj = OBJ_HANDLE_NULL;
+    static Uint64 last_ms;
+    static int anchor_x;
+    static int anchor_y;
+    bool continuing;
+    MainGamepadTarget targets[GAMEPAD_MAX_TARGETS];
+    ObjectList objects;
+    ObjectNode* node;
+    TigRect pc_rect;
+    TigRect rect;
+    int64_t pc_obj;
+    int64_t hit;
+    int count = 0;
+    int index;
+    int pc_x;
+    int pc_y;
+    int width;
+    int height;
+    TigMouseState mouse_state;
+
+    pc_obj = player_get_local_pc_obj();
+    if (pc_obj == OBJ_HANDLE_NULL || !main_gamepad_on_map()) {
+        return;
+    }
+
+    width = main_iso_width;
+    height = main_iso_height;
+
+    (void)pc_rect;
+    if (tig_mouse_get_state(&mouse_state) != TIG_OK) {
+        return;
+    }
+    continuing = SDL_GetTicks() - last_ms < 3000
+        && last_obj != OBJ_HANDLE_NULL
+        && object_hover_obj_get() == last_obj;
+    if (!continuing) {
+        anchor_x = mouse_state.x;
+        anchor_y = mouse_state.y;
+    }
+    pc_x = anchor_x;
+    pc_y = anchor_y;
+
+    object_list_vicinity(pc_obj,
+        OBJ_TM_PORTAL | OBJ_TM_CONTAINER | OBJ_TM_SCENERY | OBJ_TM_ITEM | OBJ_TM_NPC,
+        &objects);
+    for (node = objects.head; node != NULL && count < GAMEPAD_MAX_TARGETS; node = node->next) {
+        unsigned int flags = obj_field_int32_get(node->obj, OBJ_F_FLAGS);
+        int type = obj_field_int32_get(node->obj, OBJ_F_TYPE);
+        int probe;
+
+        if ((flags & (OF_DESTROYED | OF_OFF | OF_DONTDRAW | OF_INVISIBLE | OF_CLICK_THROUGH)) != 0) {
+            continue;
+        }
+
+        object_get_rect(node->obj, 0, &rect);
+        if (rect.width <= 0 || rect.height <= 0
+            || rect.x + rect.width <= 0 || rect.y + rect.height <= 0
+            || rect.x >= width || rect.y >= height) {
+            continue;
+        }
+
+        if (type == OBJ_TYPE_SCENERY
+            && ((flags & OF_FLAT) != 0 || rect.width * rect.height > 70 * 90)) {
+            continue;
+        }
+
+        // Find a point of the sprite that actually picks this object.
+        for (probe = 0; probe < 9; probe++) {
+            static const int fx[9] = { 2, 2, 1, 3, 2, 1, 3, 2, 2 };
+            static const int fy[9] = { 2, 3, 2, 2, 1, 3, 3, 4, 0 };
+            int x = rect.x + rect.width * (fx[probe] * 2 + 1) / 10;
+            int y = rect.y + rect.height * (fy[probe] * 2 + 1) / 10;
+
+            if (x < 0 || y < 0 || x >= width || y >= height) {
+                continue;
+            }
+
+            if (sub_43D9F0(x, y, &hit, 0x3) && hit == node->obj) {
+                targets[count].obj = node->obj;
+                targets[count].x = x;
+                targets[count].y = y;
+                targets[count].dist = (x - pc_x) * (x - pc_x) + (y - pc_y) * (y - pc_y);
+                if (type == OBJ_TYPE_SCENERY
+                    || (obj_type_is_critter(type)
+                        && (critter_is_dead(node->obj) || critter_leader_get(node->obj) == pc_obj))) {
+                    targets[count].dist = targets[count].dist * 3 + 40 * 40;
+                }
+                count++;
+                break;
+            }
+        }
+    }
+    object_list_destroy(&objects);
+
+    if (count == 0) {
+        return;
+    }
+
+    qsort(targets, count, sizeof(*targets), main_gamepad_target_compare);
+
+    // Continue down the list on quick repeated taps while the cursor still
+    // sits on the previous target; otherwise start from the nearest.
+    index = 0;
+    if (continuing) {
+        for (index = 0; index < count; index++) {
+            if (targets[index].obj == last_obj) {
+                break;
+            }
+        }
+        index = index < count ? (index + 1) % count : 0;
+    }
+
+    last_obj = targets[index].obj;
+    last_ms = SDL_GetTicks();
+
+    tig_debug_printf("Gamepad: target %d/%d at %d,%d\n", index + 1, count, targets[index].x, targets[index].y);
+    tig_mouse_set_position(targets[index].x, targets[index].y);
 }
 
 // Local tweak: clickable things that are not tig buttons (list rows...).

@@ -36,6 +36,10 @@ void tig_gamepad_set_dpad_callback(bool (*fn)(int direction));
 // the cursor on, width/height = size) and returns how many.
 void tig_gamepad_set_targets_callback(int (*fn)(TigRect* rects, int max));
 
+// Short tap of square on the map: the game puts the cursor on the next
+// thing worth interacting with.
+void tig_gamepad_set_cycle_callback(void (*fn)(void));
+
 // Called for every SDL event; returns true if the event was a gamepad event.
 bool tig_gamepad_handle_event(const SDL_Event* event);
 

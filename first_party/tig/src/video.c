@@ -1662,7 +1662,10 @@ bool tig_video_window_create(TigInitInfo* init_info)
     // Dock for good, so pushing the cursor to the top edge to scroll the map
     // no longer reveals the menu bar and steals the mouse.
     SDL_SetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES, "0");
-    SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl,metal");
+    // Local tweak: an explicit SDL_RENDER_DRIVER (offscreen test runs) wins.
+    if (SDL_getenv("SDL_RENDER_DRIVER") == NULL) {
+        SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl,metal");
+    }
 #elif SDL_PLATFORM_IOS
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengles2,metal");
 #endif
@@ -1670,6 +1673,7 @@ bool tig_video_window_create(TigInitInfo* init_info)
     SDL_Window* window;
     SDL_Renderer* renderer;
     if (!SDL_CreateWindowAndRenderer(name, window_width, window_height, flags, &window, &renderer)) {
+        tig_debug_printf("TIG Video: cannot create window: %s\n", SDL_GetError());
         return false;
     }
 
@@ -1722,10 +1726,10 @@ bool tig_video_window_create(TigInitInfo* init_info)
     }
 #endif
 
+    // Local tweak: no vsync is not fatal (the software renderer used for
+    // offscreen test runs has none).
     if (!SDL_SetRenderVSync(renderer, 1)) {
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        return false;
+        tig_debug_printf("TIG Video: no vsync: %s\n", SDL_GetError());
     }
 
     if (!SDL_SetRenderLogicalPresentation(renderer, init_info->width, init_info->height, SDL_LOGICAL_PRESENTATION_LETTERBOX)) {

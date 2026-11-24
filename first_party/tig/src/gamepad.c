@@ -66,6 +66,8 @@ static bool (*tig_gamepad_sticky_fn)(void);
 static bool (*tig_gamepad_on_map_fn)(void);
 static bool (*tig_gamepad_dpad_fn)(int direction);
 static int (*tig_gamepad_targets_fn)(TigRect* rects, int max);
+static void (*tig_gamepad_cycle_fn)(void);
+static Uint64 tig_gamepad_west_down_ms;
 // True while the gamepad (not a real mouse) is what the player uses.
 static bool tig_gamepad_in_use;
 static tig_window_handle_t tig_gamepad_last_top = TIG_WINDOW_HANDLE_INVALID;
@@ -110,6 +112,11 @@ void tig_gamepad_set_pan_speed(int pixels_per_second)
     if (pixels_per_second > 0) {
         tig_gamepad_pan_speed = (float)pixels_per_second;
     }
+}
+
+void tig_gamepad_set_cycle_callback(void (*fn)(void))
+{
+    tig_gamepad_cycle_fn = fn;
 }
 
 void tig_gamepad_set_targets_callback(int (*fn)(TigRect* rects, int max))
@@ -538,7 +545,14 @@ static void tig_gamepad_button(SDL_GamepadButton button, bool down)
         if (tig_gamepad_west_is_click) {
             tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, down);
         } else {
+            // Hold: highlight everything (Left Alt). Tap: next target.
             tig_gamepad_key(SDL_SCANCODE_LALT, down);
+            if (down) {
+                tig_gamepad_west_down_ms = SDL_GetTicks();
+            } else if (SDL_GetTicks() - tig_gamepad_west_down_ms < 250
+                && tig_gamepad_cycle_fn != NULL) {
+                tig_gamepad_cycle_fn();
+            }
         }
         break;
     case SDL_GAMEPAD_BUTTON_NORTH:

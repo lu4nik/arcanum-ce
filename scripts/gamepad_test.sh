@@ -10,7 +10,11 @@ if pgrep -x arcanum-ce >/dev/null; then
     exit 1
 fi
 caffeinate -dims -t "$TIMEOUT" &
-open -n --env ARCANUM_GAMEPAD_SCRIPT="$SCRIPT" --env SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1 "$APP"
+if [ -n "$OFFSCREEN" ]; then
+    ARCANUM_GAMEPAD_SCRIPT="$SCRIPT" SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1 SDL_VIDEO_DRIVER=dummy SDL_RENDER_DRIVER=software SDL_AUDIO_DRIVER=dummy "$APP/Contents/MacOS/arcanum-ce" >/dev/null 2>&1 &
+else
+    open -n --env ARCANUM_GAMEPAD_SCRIPT="$SCRIPT" --env SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1 "$APP"
+fi
 i=0
 while [ $i -lt "$TIMEOUT" ]; do
     sleep 1
