@@ -59,6 +59,10 @@ int tig_button_hide_force(tig_button_handle_t button_handle);
 void tig_button_set_art(tig_button_handle_t button_handle, tig_art_id_t art_id);
 void tig_button_translate(tig_button_handle_t button_handle, int dx, int dy);
 
+// Local tweak: clickable buttons for gamepad focus navigation. Each rect's
+// x/y is a point that hits the button, width/height the button size.
+int tig_button_focus_targets(TigRect* rects, int max, int screen_width, int screen_height, tig_window_handle_t only_window);
+
 #ifdef __cplusplus
 }
 #endif

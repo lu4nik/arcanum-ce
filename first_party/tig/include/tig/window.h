@@ -126,6 +126,10 @@ int tig_window_vbid_get(tig_window_handle_t window_handle, TigVideoBuffer** vide
 int tig_window_modal_dialog(TigWindowModalDialogInfo* modal_info, TigWindowModalDialogChoice* choice_ptr);
 int tig_window_move(tig_window_handle_t window_handle, int x, int y);
 
+// Local tweak: see window.c.
+bool tig_window_accepts_input(tig_window_handle_t window_handle);
+tig_window_handle_t tig_window_top_with_buttons(void);
+
 #ifdef __cplusplus
 }
 #endif

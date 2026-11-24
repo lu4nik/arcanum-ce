@@ -2,12 +2,15 @@
 #include "tig/gamepad_script.h"
 
 #include <math.h>
+#include <stdlib.h>
 
+#include "tig/button.h"
 #include "tig/core.h"
 #include "tig/debug.h"
 #include "tig/kb.h"
 #include "tig/mouse.h"
 #include "tig/video.h"
+#include "tig/window.h"
 
 // Local tweak: gamepad as a virtual mouse and keyboard.
 //
@@ -62,6 +65,11 @@ static bool tig_gamepad_guide_down;
 static bool (*tig_gamepad_sticky_fn)(void);
 static bool (*tig_gamepad_on_map_fn)(void);
 static bool (*tig_gamepad_dpad_fn)(int direction);
+static int (*tig_gamepad_targets_fn)(TigRect* rects, int max);
+// True while the gamepad (not a real mouse) is what the player uses.
+static bool tig_gamepad_in_use;
+static tig_window_handle_t tig_gamepad_last_top = TIG_WINDOW_HANDLE_INVALID;
+static Uint64 tig_gamepad_snap_at_ms;
 static bool tig_gamepad_east_is_back;
 static bool tig_gamepad_west_is_click;
 static bool tig_gamepad_sticky_prev;
@@ -104,6 +112,101 @@ void tig_gamepad_set_pan_speed(int pixels_per_second)
     }
 }
 
+void tig_gamepad_set_targets_callback(int (*fn)(TigRect* rects, int max))
+{
+    tig_gamepad_targets_fn = fn;
+}
+
+// A new window came up while playing with the gamepad: put the cursor on its
+// first button (reading order), so cross never fires whatever happened to be
+// under the cursor (the main menu opens with "Exit game" there).
+static void tig_gamepad_focus_first(void)
+{
+    TigRect targets[256];
+    int width;
+    int height;
+    int count;
+    int index;
+    int best = -1;
+    tig_window_handle_t top = tig_window_top_with_buttons();
+
+    if (top == TIG_WINDOW_HANDLE_INVALID || !tig_gamepad_screen_size(&width, &height)) {
+        return;
+    }
+
+    count = tig_button_focus_targets(targets, 256, width, height, top);
+    for (index = 0; index < count; index++) {
+        if (best == -1
+            || targets[index].y < targets[best].y - 8
+            || (abs(targets[index].y - targets[best].y) <= 8 && targets[index].x < targets[best].x)) {
+            best = index;
+        }
+    }
+
+    if (best != -1) {
+        tig_debug_printf("Gamepad: first focus %d,%d\n", targets[best].x, targets[best].y);
+        tig_mouse_set_position(targets[best].x, targets[best].y);
+    }
+}
+
+// Focus navigation: put the cursor on the nearest clickable thing in the
+// d-pad direction (0 up, 1 right, 2 down, 3 left).
+static bool tig_gamepad_focus_move(int direction)
+{
+    static const int dirs[4][2] = { { 0, -1 }, { 1, 0 }, { 0, 1 }, { -1, 0 } };
+    TigRect targets[512];
+    TigMouseState mouse_state;
+    int count;
+    int width;
+    int height;
+    int index;
+    int best = -1;
+    float best_score = 0.0f;
+
+    if (tig_mouse_get_state(&mouse_state) != TIG_OK
+        || !tig_gamepad_screen_size(&width, &height)) {
+        return false;
+    }
+
+    count = tig_button_focus_targets(targets, 512, width, height, TIG_WINDOW_HANDLE_INVALID);
+    if (tig_gamepad_targets_fn != NULL) {
+        count += tig_gamepad_targets_fn(targets + count, 512 - count);
+    }
+
+    for (index = 0; index < count; index++) {
+        float dx = (float)(targets[index].x - mouse_state.x);
+        float dy = (float)(targets[index].y - mouse_state.y);
+        float along = dx * (float)dirs[direction][0] + dy * (float)dirs[direction][1];
+        float across = fabsf(dx * (float)dirs[direction][1] - dy * (float)dirs[direction][0]);
+        float half_across = (float)(dirs[direction][0] != 0 ? targets[index].height : targets[index].width) / 2.0f;
+        float half_along = (float)(dirs[direction][0] != 0 ? targets[index].width : targets[index].height) / 2.0f;
+        float score;
+
+        // Skip what the cursor is already on and what lies behind it.
+        if (along <= half_along * 0.5f + 2.0f) {
+            continue;
+        }
+
+        // Things straight ahead (overlapping the cursor's line) win over
+        // things off to the side.
+        across = across > half_across ? across - half_across : 0.0f;
+        score = along + across * 3.0f;
+        if (best == -1 || score < best_score) {
+            best = index;
+            best_score = score;
+        }
+    }
+
+    if (best == -1) {
+        return false;
+    }
+
+    tig_debug_printf("Gamepad: focus %d,%d (%dx%d)\n",
+        targets[best].x, targets[best].y, targets[best].width, targets[best].height);
+    tig_mouse_set_position(targets[best].x, targets[best].y);
+    return true;
+}
+
 void tig_gamepad_set_dpad_callback(bool (*fn)(int direction))
 {
     tig_gamepad_dpad_fn = fn;
@@ -128,9 +231,15 @@ bool tig_gamepad_handle_event(const SDL_Event* event)
     case SDL_EVENT_GAMEPAD_REMOVED:
         tig_gamepad_close(event->gdevice.which);
         return true;
+    case SDL_EVENT_MOUSE_MOTION:
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        // A real mouse is in use: stop moving its cursor around.
+        tig_gamepad_in_use = false;
+        return false;
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
     case SDL_EVENT_GAMEPAD_BUTTON_UP:
         if (tig_gamepad_enabled) {
+            tig_gamepad_in_use = true;
             tig_set_active(true);
             tig_debug_printf("Gamepad: button %s %s (L1 %d L2 %d R1 %d)\n",
                 SDL_GetGamepadStringForButton((SDL_GamepadButton)event->gbutton.button),
@@ -217,6 +326,8 @@ void tig_gamepad_ping(void)
     tig_gamepad_stick(SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY, &x, &y);
     if (x != 0.0f || y != 0.0f) {
         float mag = sqrtf(x * x + y * y);
+
+        tig_gamepad_in_use = true;
         float speed = tig_gamepad_cursor_speed * mag * (tig_gamepad_precision ? PRECISION_FACTOR : 1.0f);
         bool sticky = tig_gamepad_sticky_fn != NULL && tig_gamepad_sticky_fn();
 
@@ -263,6 +374,22 @@ void tig_gamepad_ping(void)
         if (r2) {
             tig_set_active(true);
             tig_gamepad_tap(SDL_SCANCODE_R);
+        }
+    }
+
+    // Follow newly opened windows with the focus.
+    {
+        tig_window_handle_t top = tig_window_top_with_buttons();
+        if (top != tig_gamepad_last_top) {
+            tig_gamepad_last_top = top;
+            if (tig_gamepad_in_use && tig_gamepad_on_map_fn != NULL && !tig_gamepad_on_map_fn()) {
+                // Buttons are often added right after the window.
+                tig_gamepad_snap_at_ms = SDL_GetTicks() + 150;
+            }
+        }
+        if (tig_gamepad_snap_at_ms != 0 && SDL_GetTicks() >= tig_gamepad_snap_at_ms) {
+            tig_gamepad_snap_at_ms = 0;
+            tig_gamepad_focus_first();
         }
     }
 
@@ -484,6 +611,11 @@ static void tig_gamepad_button(SDL_GamepadButton button, bool down)
         } else {
             layer = 0;
             if (tig_gamepad_dpad_fn != NULL && tig_gamepad_dpad_fn(dpad)) {
+                break;
+            }
+            // In windows and menus the d-pad moves between buttons.
+            if (tig_gamepad_on_map_fn != NULL && !tig_gamepad_on_map_fn()) {
+                tig_gamepad_focus_move(dpad);
                 break;
             }
         }

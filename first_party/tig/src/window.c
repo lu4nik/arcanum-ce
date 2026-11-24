@@ -1368,6 +1368,47 @@ int tig_window_get_at_position(int x, int y, tig_window_handle_t* window_handle_
     return TIG_ERR_INVALID_PARAM;
 }
 
+// Local tweak: the topmost shown window that has buttons (gamepad focus
+// follows newly opened windows), or TIG_WINDOW_HANDLE_INVALID.
+tig_window_handle_t tig_window_top_with_buttons(void)
+{
+    int index;
+    TigWindow* win;
+    tig_button_handle_t* list;
+
+    for (index = tig_window_num_windows - 1; index >= 0; index--) {
+        win = &(windows[tig_window_handle_to_index(tig_window_stack[index])]);
+        if ((win->flags & TIG_WINDOW_HIDDEN) == 0
+            && tig_window_button_list(tig_window_stack[index], &list) > 0) {
+            return tig_window_stack[index];
+        }
+    }
+
+    return TIG_WINDOW_HANDLE_INVALID;
+}
+
+// Local tweak: false if a visible modal window sits above this one, i.e.
+// the window cannot receive input right now (gamepad focus navigation).
+bool tig_window_accepts_input(tig_window_handle_t window_handle)
+{
+    int index;
+    TigWindow* win;
+
+    for (index = tig_window_num_windows - 1; index >= 0; index--) {
+        if (tig_window_stack[index] == window_handle) {
+            return true;
+        }
+
+        win = &(windows[tig_window_handle_to_index(tig_window_stack[index])]);
+        if ((win->flags & TIG_WINDOW_HIDDEN) == 0
+            && (win->flags & TIG_WINDOW_MODAL) != 0) {
+            return false;
+        }
+    }
+
+    return false;
+}
+
 // 0x51E790
 bool tig_window_filter_message(TigMessage* msg)
 {

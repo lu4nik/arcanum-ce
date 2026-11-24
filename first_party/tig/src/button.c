@@ -897,3 +897,54 @@ void tig_button_translate(tig_button_handle_t button_handle, int dx, int dy)
     btn->rect.x += dx;
     btn->rect.y += dy;
 }
+
+// Local tweak: screen rectangles of buttons the player can click right now
+// (shown, in a shown window that is not under a modal one, and actually hit
+// at some point of the button). Used for gamepad focus navigation.
+int tig_button_focus_targets(TigRect* rects, int max, int width, int height, tig_window_handle_t only_window)
+{
+    int count = 0;
+    int index;
+    int area_limit;
+    TigButton* btn;
+    tig_button_handle_t handle;
+
+    area_limit = width * height / 3;
+
+    for (index = 0; index < MAX_BUTTONS && count < max; index++) {
+        btn = &(buttons[index]);
+        if ((btn->usage & TIG_BUTTON_USAGE_FREE) != 0
+            || (btn->flags & TIG_BUTTON_HIDDEN) != 0
+            || (only_window != TIG_WINDOW_HANDLE_INVALID && btn->window_handle != only_window)
+            || btn->rect.width <= 0
+            || btn->rect.height <= 0
+            || btn->rect.width * btn->rect.height > area_limit
+            || tig_window_is_hidden(btn->window_handle)
+            || !tig_window_accepts_input(btn->window_handle)) {
+            continue;
+        }
+
+        handle = tig_button_index_to_handle(index);
+
+        // Probe a few points: art buttons can be transparent in the middle.
+        {
+            static const int probes[5][2] = { { 1, 1 }, { 1, 0 }, { 0, 1 }, { 2, 1 }, { 1, 2 } };
+            int p;
+            for (p = 0; p < 5; p++) {
+                int x = btn->rect.x + (btn->rect.width * (probes[p][0] * 2 + 1)) / 6;
+                int y = btn->rect.y + (btn->rect.height * (probes[p][1] * 2 + 1)) / 6;
+                if (x >= 0 && y >= 0 && x < width && y < height
+                    && tig_button_get_at_position(x, y) == handle) {
+                    rects[count].x = x;
+                    rects[count].y = y;
+                    rects[count].width = btn->rect.width;
+                    rects[count].height = btn->rect.height;
+                    count++;
+                    break;
+                }
+            }
+        }
+    }
+
+    return count;
+}
