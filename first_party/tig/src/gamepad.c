@@ -1,4 +1,5 @@
 #include "tig/gamepad.h"
+#include "tig/gamepad_script.h"
 
 #include <math.h>
 
@@ -189,6 +190,8 @@ void tig_gamepad_ping(void)
     float y;
     bool l2;
     bool r2;
+
+    tig_gamepad_script_ping();
 
     now_ns = SDL_GetTicksNS();
     if (tig_gamepad_last_ping_ns == 0) {

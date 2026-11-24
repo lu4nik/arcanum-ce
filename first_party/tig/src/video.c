@@ -249,6 +249,30 @@ static int tig_video_smooth_label_frames;
 static bool tig_video_overlay_visible;
 static SDL_Texture* tig_video_overlay_texture;
 static bool tig_video_overlay_failed;
+static char tig_video_capture_path[256];
+
+void tig_video_capture_next_frame(const char* path)
+{
+    SDL_strlcpy(tig_video_capture_path, path, sizeof(tig_video_capture_path));
+}
+
+static void tig_video_capture(void)
+{
+    SDL_Surface* surface;
+
+    if (tig_video_capture_path[0] == '\0') {
+        return;
+    }
+
+    surface = SDL_RenderReadPixels(tig_video_state.renderer, NULL);
+    if (surface != NULL) {
+        if (!SDL_SaveBMP(surface, tig_video_capture_path)) {
+            tig_debug_printf("TIG Video: capture failed: %s\n", SDL_GetError());
+        }
+        SDL_DestroySurface(surface);
+    }
+    tig_video_capture_path[0] = '\0';
+}
 
 void tig_video_set_overlay_visible(bool visible)
 {
@@ -625,6 +649,8 @@ int tig_video_flip(void)
             flip_count = 0;
         }
     }
+
+    tig_video_capture();
 
     SDL_RenderPresent(tig_video_state.renderer);
 

@@ -52,6 +52,7 @@ set(SRCS
     "src/kb.c"
     "src/memory.c"
     "src/gamepad.c"
+    "src/gamepad_script.c"
     "src/message.c"
     "src/mouse.c"
     "src/movie.c"

@@ -121,6 +121,9 @@ bool tig_video_has_xbrz(void);
 // Local tweak: show/hide the gamepad button chart (HighRes/gamepad.bmp)
 // on top of the game.
 void tig_video_set_overlay_visible(bool visible);
+
+// Local tweak: save the next presented frame as a BMP (testing aid).
+void tig_video_capture_next_frame(const char* path);
 void tig_video_set_scale(int percent);
 void tig_video_logical_size_for(int pixel_width, int pixel_height, int percent, int* width_ptr, int* height_ptr);
 bool tig_video_screen_pixels(int* width_ptr, int* height_ptr);
