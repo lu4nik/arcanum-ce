@@ -615,6 +615,53 @@ int area_from_loc(int64_t loc)
 }
 
 /**
+ * Local fix: area lookup for dialogue `ia` checks.
+ *
+ * `area_from_loc` gives up when the PC's sector has no town map, even
+ * though the nearest area (within its radius) is known. Some areas have
+ * their origin just outside the town-mapped sectors (e.g. the Isle of
+ * Despair), so `ia` dialogue lines tied to them were unreachable. Town maps
+ * are still compared when both sectors have one. Random encounters and
+ * scripts keep using the original lookup.
+ */
+int area_of_object_for_dialog(int64_t obj)
+{
+    int64_t loc;
+    int map;
+    int area;
+    int loc_townmap;
+    int area_townmap;
+
+    area = area_of_object(obj);
+    if (area != AREA_UNKNOWN || obj == OBJ_HANDLE_NULL) {
+        return area;
+    }
+
+    map = map_current_map();
+    if (!map_get_area(map, &area)
+        || area != AREA_UNKNOWN
+        || map != map_by_type(MAP_TYPE_START_MAP)) {
+        return AREA_UNKNOWN;
+    }
+
+    loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
+    area = get_nearest_area(loc);
+    if (area == AREA_UNKNOWN) {
+        return AREA_UNKNOWN;
+    }
+
+    loc_townmap = townmap_get(sector_id_from_loc(loc));
+    area_townmap = townmap_get(sector_id_from_loc(area_get_location(area)));
+    if (loc_townmap != TOWNMAP_NONE
+        && area_townmap != TOWNMAP_NONE
+        && loc_townmap != area_townmap) {
+        return AREA_UNKNOWN;
+    }
+
+    return area;
+}
+
+/**
  * Retrieves the area associated with an object's current map.
  *
  * The `obj` is implied to be a player character, but this is not enforced.

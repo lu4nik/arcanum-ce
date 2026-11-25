@@ -1471,7 +1471,10 @@ void ai_npc_wait(int64_t obj)
 
     wait = obj_field_int32_get(obj, OBJ_F_NPC_WAIT);
     leader_obj = critter_leader_get(obj);
-    if (stat_is_extraordinary(leader_obj, STAT_CHARISMA)
+
+    // NOTE: The original code (0x4AA818) skips the "become jilted" timer when the leader's
+    // charisma IS extraordinary - such followers wait indefinitely.
+    if (!stat_is_extraordinary(leader_obj, STAT_CHARISMA)
         && (obj_field_int32_get(obj, OBJ_F_SPELL_FLAGS) & OSF_MIND_CONTROLLED) == 0) {
         if (basic_skill_training_get(leader_obj, BASIC_SKILL_PERSUATION) != TRAINING_NONE) {
             wait++;
@@ -2725,6 +2728,19 @@ bool ai_standpoints_process(int64_t obj, bool a2)
 
     wandering_range = (npc_flags & (ONF_WANDERS_IN_DARK | ONF_WANDERS)) != 0 ? 4 : 1;
     if (dist <= wandering_range) {
+        // FIX: A wandering NPC asleep in the bed of their night standpoint
+        // can also be within wandering range of the day standpoint; the
+        // original code then never woke them up (e.g. Mrs. Cameron in
+        // Blackroot). The current standpoint has no bed, so wake up.
+        if (is_sleeping && ai_find_nearest_bed(standpoint_loc) == OBJ_HANDLE_NULL) {
+            if ((npc_flags & ONF_WAYPOINTS_BED) != 0) {
+                npc_flags &= ~ONF_WAYPOINTS_BED;
+                obj_field_int32_set(obj, OBJ_F_NPC_FLAGS, npc_flags);
+            }
+            ai_wake_up(obj);
+            return true;
+        }
+
         if ((npc_flags & ONF_WAYPOINTS_BED) == 0) {
             npc_flags |= ONF_WAYPOINTS_BED;
             obj_field_int32_set(obj, OBJ_F_NPC_FLAGS, npc_flags);

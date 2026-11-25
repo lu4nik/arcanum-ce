@@ -1827,11 +1827,11 @@ bool sub_4150D0(DialogState* a1, char* a2)
             break;
         case DIALOG_COND_IA:
             if (value > 0) {
-                if (area_of_object(a1->pc_obj) != value) {
+                if (area_of_object_for_dialog(a1->pc_obj) != value) {
                     return false;
                 }
             } else {
-                if (area_of_object(a1->pc_obj) == -value) {
+                if (area_of_object_for_dialog(a1->pc_obj) == -value) {
                     return false;
                 }
             }

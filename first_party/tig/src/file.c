@@ -1949,6 +1949,13 @@ bool tig_file_copy_internal(TigFile* dst, TigFile* src)
         size -= sizeof(buffer);
     }
 
+    // FIX: Original code fails when the file size is an exact multiple of
+    // the buffer size: a zero-length tail read "fails", so the copy is
+    // reported as broken (e.g. 160 KB voice files never play).
+    if (size == 0) {
+        return true;
+    }
+
     if (tig_file_fread(buffer, size, 1, src) != 1) {
         return false;
     }

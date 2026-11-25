@@ -24,5 +24,6 @@ void area_reset_last_known_area(int64_t pc_obj);
 int area_get_nearest_known_area(int64_t loc, int64_t pc_obj, int64_t range);
 int area_get_nearest_area_in_range(int64_t loc, bool safe);
 int area_of_object(int64_t obj);
+int area_of_object_for_dialog(int64_t obj);
 
 #endif /* ARCANUM_GAME_AREA_H_ */
