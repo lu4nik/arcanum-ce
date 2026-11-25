@@ -230,9 +230,10 @@ jobs:
       # preset's "Visual Studio 17 2022"; use whatever vswhere reports.
       - name: Configure
         run: |
-          vs=$("/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" -latest -property catalog_productLineVersion)
+          vs=$("/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" -latest -prerelease -products '*' -property installationVersion || true)
+          echo "Visual Studio: ${vs:-not found}"
           gen=()
-          if [ "$vs" = "2026" ]; then
+          if [ "${vs%%.*}" = "18" ]; then
             gen=(-G "Visual Studio 18 2026")
           fi
           cmake --preset windows-${{ matrix.arch }} "${gen[@]}"
