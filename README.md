@@ -1,13 +1,11 @@
 # Arcanum CE — macOS fork (lu4nik)
 
-> **This is a modified version of [Arcanum: Community Edition](https://github.com/alexbatalov/arcanum-ce)
-> by Alexander Batalov.** It is distributed free of charge for non-commercial use under the same
-> [Sustainable Use License](LICENSE.md). The changes below were made with the help of AI (Claude by
-> Anthropic) for playing the game comfortably on a Mac, in particular with the
-> [Ukrainian translation](https://github.com/lu4nik/arcanum-ua). Not affiliated with the upstream
-> project; please do not report problems of this fork upstream.
+> A modified build of [Arcanum: Community Edition](https://github.com/alexbatalov/arcanum-ce), free for
+> non-commercial use under the [Sustainable Use License](LICENSE.md). Made with the help of AI (Claude
+> by Anthropic) for playing comfortably on a Mac, in particular with the
+> [Ukrainian translation](https://github.com/lu4nik/arcanum-ua).
 
-## What is different from upstream
+## What is in this fork
 
 - **Gamepad support** (DualSense, DualShock 4, Xbox, Switch Pro, Steam Input) as a virtual mouse and
   keyboard, so every screen works: left stick or touchpad moves the cursor (it pauses on objects),
