@@ -1,0 +1,54 @@
+# Fork: build the Windows (x86) release and attach it to a GitHub release.
+# Runs when a release is published, or by hand (then it only uploads an
+# artifact). x86 because movies go through the game's own 32-bit binkw32.dll.
+name: Windows release
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  windows-x86:
+    runs-on: windows-2022
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v5
+
+      - name: Configure
+        run: cmake --preset windows-x86
+
+      - name: Build
+        run: cmake --build --preset windows-x86-release
+
+      - name: Package
+        run: |
+          name="arcanum-ce-windows-x86-${GITHUB_REF_NAME}"
+          mkdir -p "pkg/$name/licenses"
+          cp out/build/windows-x86/Release/arcanum-ce.exe "pkg/$name/"
+          cp -R dist/windows/HighRes "pkg/$name/"
+          cp dist/windows/README-Windows.txt "pkg/$name/"
+          cp LICENSE.md "pkg/$name/licenses/arcanum-ce-LICENSE.md"
+          (cd pkg && 7z a -tzip "$name.zip" "$name" > /dev/null)
+          echo "PKG=pkg/$name.zip" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: arcanum-ce-windows-x86
+          path: ${{ env.PKG }}
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" "$PKG" --clobber

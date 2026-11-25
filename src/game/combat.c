@@ -2448,13 +2448,14 @@ void combat_process_crit_hit(CombatContext* combat)
 
                 if (combat->hit_loc == HIT_LOC_HEAD) {
                     if (crit_hit_type == CRIT_HIT_TYPE_CRUSHING) {
-                        // Crushing head hits can knock the helmet off, but
-                        // never blind (as in the original).
+                        // NOTE: In the original a crushing head hit that does
+                        // not knock the helmet off never blinds. Fork choice:
+                        // keep the CE behaviour, a mace to the head may blind.
                         if (helmet_obj != OBJ_HANDLE_NULL
                             && random_between(1, 100) <= chance + 5) {
                             combat->dam_flags |= CDF_DROP_HELMET;
+                            break;
                         }
-                        break;
                     }
 
                     if (!npc_attacks_pc

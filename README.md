@@ -17,6 +17,12 @@ non-commercial use under the same [Sustainable Use License](LICENSE.md).
 
 ## What is in this fork
 
+- **Engine bug fixes.** 50 places where CE behaved differently from the original `Arcanum.exe`,
+  found by checking dialogue, scripts, combat, AI, items, spells and stats against its disassembly
+  (inverted dialogue conditions, script actions that also ran the next action, a divide that added,
+  crippled legs that healed blindness, NPCs picking the worst weapon, and more), plus fixes for
+  bugs of the original game itself (unplayed voice lines, NPCs sleeping forever, a crash after hours
+  of play). The details are in the commit messages.
 - **Gamepad support** (DualSense, DualShock 4, Xbox, Switch Pro, Steam Input) as a virtual mouse and
   keyboard, so every screen works: left stick or touchpad moves the cursor (it pauses on objects),
   square snaps it to the nearest person, door or container, the d-pad walks between buttons, list rows
@@ -48,7 +54,14 @@ non-commercial use under the same [Sustainable Use License](LICENSE.md).
   windows; black letterbox bars.
 
 Tested on macOS (Apple Silicon) with the GOG version, Unofficial Arcanum Patch 2.0.2 and the Ukrainian
-translation.
+translation. A Windows build (32-bit, built by GitHub Actions) is attached to releases too; it gets
+little testing, so feedback is welcome.
+
+## Running it on Windows
+
+Download `arcanum-ce-windows-x86-*.zip` from [Releases](../../releases) and copy `arcanum-ce.exe`
+and the `HighRes` folder into the game folder, next to the original `Arcanum.exe`, then start
+`arcanum-ce.exe` (it is not signed: SmartScreen → "More info" → "Run anyway").
 
 ## Running it on a Mac
 
