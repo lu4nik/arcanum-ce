@@ -64,6 +64,7 @@ static bool main_gamepad_sticky(void);
 static bool main_gamepad_on_map(void);
 static bool main_gamepad_dpad(int direction);
 static int main_iso_width = 800;
+static tig_window_handle_t main_iso_window = TIG_WINDOW_HANDLE_INVALID;
 static int main_iso_height = 600;
 static int main_gamepad_targets(TigRect* rects, int max);
 static void main_gamepad_next_target(void);
@@ -321,6 +322,7 @@ int main(int argc, char** argv)
         tig_exit();
         return EXIT_SUCCESS; // FIXME: Should be `EXIT_FAILURE`.
     }
+    main_iso_window = game_init_info.iso_window_handle;
 
     tig_mouse_hide();
 
@@ -1070,6 +1072,8 @@ static void main_gamepad_next_target(void)
     static Uint64 last_ms;
     static int anchor_x;
     static int anchor_y;
+    static int last_x;
+    static int last_y;
     bool continuing;
     MainGamepadTarget targets[GAMEPAD_MAX_TARGETS];
     ObjectList objects;
@@ -1098,9 +1102,12 @@ static void main_gamepad_next_target(void)
     if (tig_mouse_get_state(&mouse_state) != TIG_OK) {
         return;
     }
+    // A tap continues the walk while the cursor still sits where the last
+    // tap put it (hover alone is not enough: it can be lost under the UI).
     continuing = SDL_GetTicks() - last_ms < 3000
         && last_obj != OBJ_HANDLE_NULL
-        && object_hover_obj_get() == last_obj;
+        && (object_hover_obj_get() == last_obj
+            || (mouse_state.x == last_x && mouse_state.y == last_y));
     if (!continuing) {
         anchor_x = mouse_state.x;
         anchor_y = mouse_state.y;
@@ -1143,6 +1150,17 @@ static void main_gamepad_next_target(void)
                 continue;
             }
 
+            // Skip points covered by the interface bar or another window:
+            // the cursor there would not reach the object.
+            {
+                tig_window_handle_t window;
+
+                if (tig_window_get_at_position(x, y, &window) != TIG_OK
+                    || window != main_iso_window) {
+                    continue;
+                }
+            }
+
             if (sub_43D9F0(x, y, &hit, 0x3) && hit == node->obj) {
                 targets[count].obj = node->obj;
                 targets[count].x = x;
@@ -1180,6 +1198,8 @@ static void main_gamepad_next_target(void)
 
     last_obj = targets[index].obj;
     last_ms = SDL_GetTicks();
+    last_x = targets[index].x;
+    last_y = targets[index].y;
 
     tig_debug_printf("Gamepad: target %d/%d at %d,%d\n", index + 1, count, targets[index].x, targets[index].y);
     tig_mouse_set_position(targets[index].x, targets[index].y);
