@@ -533,15 +533,15 @@ void main_loop(void)
                         IntgameMode esc_mode = intgame_mode_get();
                         tig_debug_printf("Esc: mode %d (before event %d), dialog %d, wmap %d\n",
                             esc_mode, mode_before_event, dialog_ui_is_local_pc_in_dialog(), wmap_ui_is_created());
+                        // Local tweak: Esc closes trade windows too (exchanging
+                        // items with a follower); originally it opened the menu.
                         if (esc_mode != INTGAME_MODE_MAIN
-                            && esc_mode != INTGAME_MODE_DIALOG
-                            && esc_mode != INTGAME_MODE_BARTER) {
+                            && esc_mode != INTGAME_MODE_DIALOG) {
                             intgame_mode_set(INTGAME_MODE_MAIN);
                             break;
                         }
                         if (mode_before_event != INTGAME_MODE_MAIN
-                            && mode_before_event != INTGAME_MODE_DIALOG
-                            && mode_before_event != INTGAME_MODE_BARTER) {
+                            && mode_before_event != INTGAME_MODE_DIALOG) {
                             break;
                         }
                         if (dialog_ui_is_local_pc_in_dialog()
