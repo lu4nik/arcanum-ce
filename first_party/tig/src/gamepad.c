@@ -38,7 +38,7 @@
 #define TRIGGER_THRESHOLD 0.5f
 #define PRECISION_FACTOR 0.3f
 #define QUICKLOAD_HOLD_MS 1000
-#define HINT_HOLD_MS 400
+#define HINT_HOLD_MS 1000
 #define STICKY_FACTOR 0.4f
 #define STICKY_STOP_MS 120
 
@@ -78,6 +78,8 @@ static bool tig_gamepad_sticky_prev;
 static Uint64 tig_gamepad_sticky_stop_until_ms;
 static Uint64 tig_gamepad_modifier_since_ms;
 static bool tig_gamepad_hint_shown;
+// A modifier+d-pad combo was used during the current modifier hold.
+static bool tig_gamepad_combo_used;
 static Uint64 tig_gamepad_back_down_ms;
 static bool tig_gamepad_back_fired;
 
@@ -418,19 +420,22 @@ void tig_gamepad_ping(void)
         }
     }
 
-    // Holding a modifier (or PS) for a moment shows the button chart.
+    // Holding a modifier (or PS) for a moment shows the button chart --
+    // unless the hold is being used for d-pad combos (hotkeys): then the
+    // chart would only cover the game.
     {
         bool modifier = tig_gamepad_l1_down || tig_gamepad_l2_down || tig_gamepad_r1_down;
         bool hint;
 
         if (!modifier) {
             tig_gamepad_modifier_since_ms = 0;
+            tig_gamepad_combo_used = false;
         } else if (tig_gamepad_modifier_since_ms == 0) {
             tig_gamepad_modifier_since_ms = SDL_GetTicks();
         }
 
         hint = tig_gamepad_guide_down
-            || (modifier && SDL_GetTicks() - tig_gamepad_modifier_since_ms >= HINT_HOLD_MS);
+            || (modifier && !tig_gamepad_combo_used && SDL_GetTicks() - tig_gamepad_modifier_since_ms >= HINT_HOLD_MS);
         if (hint != tig_gamepad_hint_shown) {
             tig_gamepad_hint_shown = hint;
             tig_video_set_overlay_visible(hint);
@@ -650,6 +655,10 @@ static void tig_gamepad_button(SDL_GamepadButton button, bool down)
                 tig_gamepad_focus_move(dpad);
                 break;
             }
+        }
+
+        if (layer != 0) {
+            tig_gamepad_combo_used = true;
         }
 
         if (dpad_keys[layer][dpad] != SDL_SCANCODE_UNKNOWN) {

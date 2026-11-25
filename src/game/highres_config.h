@@ -22,6 +22,7 @@ typedef struct HighResConfig {
     bool gamepad; // Local tweak: gamepad as virtual mouse/keyboard
     int gamepad_cursor_speed; // Local tweak: cursor px/s at full stick
     int gamepad_pan_speed; // Local tweak: map pan px/s at full right stick
+    bool scroll_limit; // Local tweak: stick/trackpad scrolling keeps the character on screen
 
 } HighResConfig;
 
