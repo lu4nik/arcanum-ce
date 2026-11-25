@@ -1507,7 +1507,7 @@ bool sub_4150D0(DialogState* a1, char* a2)
             }
             object_list_destroy(&followers);
             if (value < 0) {
-                if (gold > value) {
+                if (gold > -value) {
                     return false;
                 }
             } else {
@@ -1638,22 +1638,22 @@ bool sub_4150D0(DialogState* a1, char* a2)
             break;
         case DIALOG_COND_FO:
             if (value == 0) {
-                if (critter_leader_get(a1->npc_obj) != a1->pc_obj) {
+                if (critter_leader_get(a1->npc_obj) == a1->pc_obj) {
                     return false;
                 }
             } else if (value == 1) {
-                if (critter_leader_get(a1->npc_obj) == a1->pc_obj) {
+                if (critter_leader_get(a1->npc_obj) != a1->pc_obj) {
                     return false;
                 }
             }
             break;
         case DIALOG_COND_LE:
             if (value < 0) {
-                if (-stat_level_get(a1->pc_obj, STAT_LEVEL) > -value) {
+                if (stat_level_get(a1->pc_obj, STAT_LEVEL) > -value) {
                     return false;
                 }
             } else {
-                if (-stat_level_get(a1->pc_obj, STAT_LEVEL) < value) {
+                if (stat_level_get(a1->pc_obj, STAT_LEVEL) < value) {
                     return false;
                 }
             }
@@ -1909,8 +1909,15 @@ bool sub_415BA0(DialogState* a1, char* a2, int a3)
 
                 value = -value;
 
-                total_gold = item_gold_get(a1->pc_obj);
-                item_gold_transfer(a1->pc_obj, a1->npc_obj, value, OBJ_HANDLE_NULL);
+                // NOTE: The original asks each payer for the whole remainder,
+                // which `item_gold_transfer` refuses when they have less, yet
+                // still subtracts their purse. So the PC kept their gold and
+                // the followers paid short. Each payer now pays what they can
+                // (the `$$` condition already checked the party can afford it),
+                // and the remainder shrinks after every follower (the C port
+                // had dropped that, charging every follower in full).
+                total_gold = SDL_min(item_gold_get(a1->pc_obj), value);
+                item_gold_transfer(a1->pc_obj, a1->npc_obj, total_gold, OBJ_HANDLE_NULL);
 
                 value -= total_gold;
                 if (value > 0) {
@@ -1921,8 +1928,9 @@ bool sub_415BA0(DialogState* a1, char* a2, int a3)
                             break;
                         }
 
-                        total_gold = item_gold_get(node->obj);
-                        item_gold_transfer(node->obj, a1->npc_obj, value, OBJ_HANDLE_NULL);
+                        total_gold = SDL_min(item_gold_get(node->obj), value);
+                        item_gold_transfer(node->obj, a1->npc_obj, total_gold, OBJ_HANDLE_NULL);
+                        value -= total_gold;
 
                         node = node->next;
                     }
@@ -3547,7 +3555,7 @@ void sub_419260(DialogState* a1, const char* str)
         int value;
 
         while (*str != '\0') {
-            while (!SDL_isdigit(*str)) {
+            while (*str != '\0' && !SDL_isdigit(*str)) {
                 str++;
             }
 
@@ -3561,7 +3569,17 @@ void sub_419260(DialogState* a1, const char* str)
                 str++;
             }
 
+            // Skip the spaces before the value, as the original does; without
+            // this "4 fl 30" was read as a number (0) instead of a flag.
+            while (*str == ' ') {
+                str++;
+            }
+
             if (*str == '\0') {
+                break;
+            }
+
+            if (index < 0 || index >= SDL_arraysize(flags)) {
                 break;
             }
 

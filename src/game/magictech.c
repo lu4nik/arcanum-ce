@@ -1767,9 +1767,9 @@ bool sub_450940(int mt_id)
     }
 
     if (run_info->action == MAGICTECH_ACTION_BEGIN) {
-        cost = magictech_spells[mt_id].cost;
+        cost = magictech_spells[run_info->spell].cost;
     } else {
-        cost = magictech_get_maintenance(mt_id)->cost;
+        cost = magictech_get_maintenance(run_info->spell)->cost;
     }
 
     if (magictech_cheat_mode) {
@@ -2434,6 +2434,7 @@ void magictech_component_dispel_internal(int mt_id, int64_t obj)
         if ((flags & OSF_STONED) != 0) {
             flags &= ~OSF_STONED;
             obj_field_int32_set(obj, OBJ_F_SPELL_FLAGS, flags);
+            object_flags_unset(obj, OF_STONED);
         }
         if ((flags & OSF_SUMMONED) != 0) {
             object_destroy(obj);
@@ -2915,7 +2916,7 @@ void magictech_component_trait(int64_t obj, MagicTechComponentTrait* trait, int 
                 }
             }
 
-            weapon = tig_art_critter_id_weapon_get(art_id);
+            weapon = tig_art_critter_id_weapon_get(art_id) != 0 ? 1 : 0;
             anim = tig_art_id_anim_get(art_id);
             rot = tig_art_id_rotation_get(art_id);
 
@@ -3235,7 +3236,7 @@ bool sub_453410(int mt_id, int spell, int64_t obj, int* other_mt_id_ptr)
                 return true;
             } else if (magictech_run_info[idx].target_obj.obj == OBJ_HANDLE_NULL
                 && (magictech_spells[magictech_run_info[idx].spell].target_params[MAGICTECH_ACTION_BEGIN].tgt & TGT_SELF) != 0
-                && magictech_run_info[idx].source_obj.obj == obj
+                && magictech_run_info[idx].parent_obj.obj == obj
                 && magictech_run_info[idx].spell == spell
                 && magictech_run_info[idx].id != mt_id) {
                 if (other_mt_id_ptr != NULL) {
@@ -4294,7 +4295,7 @@ bool sub_4551C0(int64_t a1, int64_t a2, int64_t a3)
             return false;
         }
 
-        if (lock_difficulty >= 0 && magictech_cur_run_info->parent_obj.aptitude < lock_difficulty) {
+        if (lock_difficulty >= 20 && magictech_cur_run_info->parent_obj.aptitude < lock_difficulty) {
             return false;
         }
     }
@@ -4912,6 +4913,10 @@ bool sub_456430(int64_t a1, int64_t a2, MagicTechInfo* magictech)
         return false;
     }
 
+    if (a2 == OBJ_HANDLE_NULL) {
+        return true;
+    }
+
     if ((obj_field_int32_get(a2, OBJ_F_SPELL_FLAGS) & magictech->disallowed_tsf) != 0) {
         return false;
     }
@@ -5088,7 +5093,7 @@ bool sub_456A10(int64_t a1, int64_t a2, int64_t a3)
         stat_level_get(a2, STAT_MAGICK_TECH_APTITUDE);
     }
 
-    if (aptitude > 0) {
+    if (aptitude >= 0) {
         return true;
     }
 

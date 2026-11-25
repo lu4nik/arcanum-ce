@@ -775,6 +775,9 @@ int stat_base_set(int64_t obj, int stat, int value)
         // Update UI.
         sub_4601C0();
         break;
+    case STAT_FATE_POINTS:
+        sub_4601C0();
+        break;
     case STAT_MAGICK_POINTS:
     case STAT_TECH_POINTS:
         // Recalc item effects affected by magic/tech aptitude.
@@ -1046,11 +1049,12 @@ bool stat_poison_timeevent_process(TimeEvent* timeevent)
                 combat.dam[DAMAGE_TYPE_NORMAL] = damage;
                 combat.flags |= 0x80;
                 combat_dmg(&combat);
-            }
 
-            // Add blood splotch effect if applicable.
-            if ((combat.dam_flags & CDF_HAVE_DAMAGE) != 0) {
-                anim_play_blood_splotch_fx(combat.target_obj, BLOOD_SPLOTCH_TYPE_POISON, DAMAGE_TYPE_POISON, &combat);
+                // Add blood splotch effect if applicable (`combat` is only
+                // set up when the critter is on).
+                if ((combat.dam_flags & CDF_HAVE_DAMAGE) != 0) {
+                    anim_play_blood_splotch_fx(combat.target_obj, BLOOD_SPLOTCH_TYPE_POISON, DAMAGE_TYPE_POISON, &combat);
+                }
             }
 
             // Schedule next poison event.

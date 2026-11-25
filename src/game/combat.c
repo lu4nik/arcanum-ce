@@ -1514,7 +1514,11 @@ void combat_dmg(CombatContext* combat)
                 item_obj = item_wield_get(combat->target_obj, inventory_location);
                 if (item_obj != OBJ_HANDLE_NULL
                     && obj_field_int32_get(item_obj, OBJ_F_TYPE) == OBJ_TYPE_ARMOR) {
-                    object_script_execute(combat->attacker_obj, item_obj, combat->target_obj, SAP_TAKING_DAMAGE, 0);
+                    object_script_execute(combat->attacker_obj,
+                        item_obj,
+                        combat->target_obj,
+                        (combat->flags & CF_HIT) != 0 ? SAP_CRITICAL_HIT : SAP_CRITICAL_MISS,
+                        0);
                 }
             }
         }
@@ -1651,7 +1655,7 @@ void combat_dmg(CombatContext* combat)
             int64_t shield_obj = item_wield_get(combat->target_obj, ITEM_INV_LOC_SHIELD);
             if (shield_obj != OBJ_HANDLE_NULL
                 && sub_464D20(shield_obj, ITEM_INV_LOC_SHIELD, combat->target_obj)) {
-                item_drop_nearby(weapon_obj);
+                item_drop_nearby(shield_obj);
 
                 mes_file_entry.num = 20; // "Item dropped"
                 mes_get_msg(combat_mes_file, &mes_file_entry);
@@ -1782,7 +1786,7 @@ void combat_dmg(CombatContext* combat)
         if (dam > 0) {
             mes_file_entry.num = 1; // "HT"
             mes_get_msg(combat_mes_file, &mes_file_entry);
-            snprintf(str, sizeof(str), "%s %d", mes_file_entry.str, dam);
+            snprintf(str, sizeof(str), "%d %s", dam, mes_file_entry.str);
         }
 
         combat->total_dam = dam;
@@ -1812,9 +1816,11 @@ void combat_dmg(CombatContext* combat)
                     combat->dam[DAMAGE_TYPE_FATIGUE],
                     mes_file_entry.str);
 
-                critter_fatigue_damage_set(combat->target_obj,
-                    critter_fatigue_damage_get(combat->target_obj) + combat->dam[DAMAGE_TYPE_FATIGUE]);
+                combat->dam_flags |= CDF_HAVE_DAMAGE;
             }
+
+            critter_fatigue_damage_set(combat->target_obj,
+                critter_fatigue_damage_get(combat->target_obj) + combat->dam[DAMAGE_TYPE_FATIGUE]);
         }
 
         if (tf_level_get() == TF_LEVEL_VERBOSE && str[0] != '\0') {
@@ -2228,7 +2234,7 @@ void combat_heal(CombatContext* combat)
         }
         if ((combat->dam_flags & CDF_CRIPPLE_LEG) != 0
             && (critter_flags & OCF_CRIPPLED_LEGS_BOTH) != 0) {
-            critter_flags &= ~OCF_BLINDED;
+            critter_flags &= ~OCF_CRIPPLED_LEGS_BOTH;
             obj_field_int32_set(combat->target_obj, OBJ_F_CRITTER_FLAGS, critter_flags);
         }
     }
@@ -2365,6 +2371,7 @@ void combat_process_crit_hit(CombatContext* combat)
     if (combat->weapon_obj != OBJ_HANDLE_NULL
         && obj_field_int32_get(combat->weapon_obj, OBJ_F_TYPE) == OBJ_TYPE_WEAPON) {
         crit_hit_type = obj_field_int32_get(combat->weapon_obj, OBJ_F_WEAPON_CRIT_HIT_CHART);
+        chance = 0;
         if ((combat->flags & 0x20000) == 0) {
             chance = item_adjust_magic(combat->weapon_obj,
                 combat->attacker_obj,
@@ -2413,7 +2420,7 @@ void combat_process_crit_hit(CombatContext* combat)
 
                 if (target_obj_type != OBJ_TYPE_PC
                     && (critter_flags & OCF_FATIGUE_IMMUNE) == 0
-                    && random_between(1, 100) < difficulty
+                    && random_between(1, 100) <= difficulty
                     && !critter_check_stat(combat->target_obj, STAT_CONSTITUTION, -5)) {
                     combat->dam_flags |= CDF_KNOCKOUT;
                 }
@@ -2441,11 +2448,13 @@ void combat_process_crit_hit(CombatContext* combat)
 
                 if (combat->hit_loc == HIT_LOC_HEAD) {
                     if (crit_hit_type == CRIT_HIT_TYPE_CRUSHING) {
+                        // Crushing head hits can knock the helmet off, but
+                        // never blind (as in the original).
                         if (helmet_obj != OBJ_HANDLE_NULL
                             && random_between(1, 100) <= chance + 5) {
                             combat->dam_flags |= CDF_DROP_HELMET;
-                            break;
                         }
+                        break;
                     }
 
                     if (!npc_attacks_pc

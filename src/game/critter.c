@@ -775,14 +775,14 @@ void sub_45DC90(int64_t killer_obj, int64_t victim_obj, bool a3)
         if (alignment2 < 0) {
             alignment1 = stat_level_get(killer_obj, STAT_ALIGNMENT);
             if (alignment1 > alignment2) {
-                alignment2 = -alignment2;
                 adj = 100 - alignment2;
+                alignment2 = -alignment2;
             } else {
                 adj = alignment2 - 100;
             }
         } else {
-            alignment2 = -alignment2;
             adj = -100 - alignment2;
+            alignment2 = -alignment2;
         }
 
         v1 = alignment2 / 20;
@@ -1852,7 +1852,7 @@ void critter_give_xp(int64_t obj, int xp_gain)
         xp_gain += xp_gain / 2;
         break;
     case GAME_DIFFICULTY_HARD:
-        xp_gain -= xp_gain / 2;
+        xp_gain -= xp_gain / 4;
         break;
     }
 

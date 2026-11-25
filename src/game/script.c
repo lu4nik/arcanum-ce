@@ -504,7 +504,7 @@ int script_local_counter_get(int64_t obj, int index, int counter)
 
     obj_arrayfield_script_get(obj, OBJ_F_SCRIPTS_IDX, index, &scr);
 
-    return scr.num != 0 ? (scr.hdr.counters >> (8 * counter)) : 0;
+    return scr.num != 0 ? ((scr.hdr.counters >> (8 * counter)) & 0xFF) : 0;
 }
 
 // 0x445020
@@ -515,8 +515,8 @@ void script_local_counter_set(int64_t obj, int index, int counter, int value)
     obj_arrayfield_script_get(obj, OBJ_F_SCRIPTS_IDX, index, &scr);
 
     if (scr.num) {
-        scr.hdr.counters &= ~(0xFF << (8 * counter));
-        scr.hdr.counters |= value << (8 * counter);
+        scr.hdr.counters &= ~(0xFFu << (8 * counter));
+        scr.hdr.counters |= ((unsigned int)value & 0xFF) << (8 * counter);
 
         obj_arrayfield_script_set(obj, OBJ_F_SCRIPTS_IDX, index, &scr);
     }
@@ -1520,7 +1520,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
 
             if (scr.hdr.flags != state->invocation->script->hdr.flags
                 || scr.hdr.counters != state->invocation->script->hdr.counters) {
-                scr.hdr.flags = state->invocation->script->hdr.counters;
+                scr.hdr.flags = state->invocation->script->hdr.flags;
                 scr.hdr.counters = state->invocation->script->hdr.counters;
                 obj_arrayfield_script_set(state->invocation->attachee_obj, OBJ_F_SCRIPTS_IDX, state->invocation->attachment_point, &scr);
             }
@@ -1589,7 +1589,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
             script_set_value(action->op_type[0],
                 action->op_value[0],
                 state,
-                value1 + value2);
+                value1 / value2);
         }
         return NEXT;
     }
@@ -1916,6 +1916,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
             ? tech_skill_level(obj, GET_TECH_SKILL(skill))
             : basic_skill_level(obj, GET_BASIC_SKILL(skill));
         script_set_value(action->op_type[2], action->op_value[2], state, value);
+        return NEXT;
     }
     case SAT_CAST_SPELL: {
         int64_t source_obj = script_get_obj(action->op_type[0], action->op_value[0], state);
@@ -1951,13 +1952,14 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
     case SAT_CREATE_OBJECT: {
         int proto = script_get_value(action->op_type[0], action->op_value[0], state);
         int64_t near_obj = script_get_obj(action->op_type[1], action->op_value[1], state);
-        int64_t loc = -1;
-        for (int attempt = 0; attempt < 10; attempt++) {
+        int64_t loc;
+        int attempt;
+        for (attempt = 0; attempt < 10; attempt++) {
             if (target_find_displacement_loc(near_obj, random_between(1, 3), &loc)) {
                 break;
             }
         }
-        if (loc == -1) {
+        if (attempt == 10) {
             loc = obj_field_int64_get(near_obj, OBJ_F_LOCATION);
         }
 
@@ -2277,7 +2279,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         ui_written_newspaper_headline(newspaper_get(NEWSPAPER_CURRENT), str);
         size_t len = strlen(str);
         if (len > 0) {
-            if (str[len] != '.' && str[len] != '?' && str[len] != '!') {
+            if (str[len - 1] != '.' && str[len - 1] != '?' && str[len - 1] != '!') {
                 str[len++] = '.';
             }
             str[len++] = ' ';
@@ -2515,6 +2517,7 @@ int script_execute_action(ScriptAction* action, int line, ScriptState* state)
         DateTime datetime = sub_45A7C0();
         int hours = datetime_get_hour_since_reference_date(&datetime);
         script_set_value(action->op_type[0], action->op_value[0], state, hours);
+        return NEXT;
     }
     case SAT_TOGGLE_SECTOR_BLOCKED: {
         int x = script_get_value(action->op_type[0], action->op_value[0], state);
@@ -3247,8 +3250,8 @@ void script_set_value(ScriptValueType type, int index, ScriptState* state, int v
 
     switch (type) {
     case SVT_COUNTER:
-        state->invocation->script->hdr.counters &= ~(0xFF << (8 * index));
-        state->invocation->script->hdr.counters |= value << (8 * index);
+        state->invocation->script->hdr.counters &= ~(0xFFu << (8 * index));
+        state->invocation->script->hdr.counters |= ((unsigned int)value & 0xFF) << (8 * index);
         break;
     case SVT_GL_VAR:
         script_global_var_set(index, value);

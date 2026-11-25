@@ -378,8 +378,8 @@ bool sub_4A8570(Ai* ai)
         if (!anim_is_current_goal_type(ai->obj, AG_ANIMATE_STUNNED, NULL)) {
             critter_flags &= ~OCF_STUNNED;
             obj_field_int32_set(ai->obj, OBJ_F_CRITTER_FLAGS, critter_flags);
-            return false;
         }
+        return false;
     }
 
     if (critter_is_unconscious(ai->obj)) {
@@ -690,7 +690,7 @@ bool ai_look_for_item_func(int64_t obj, unsigned int flags)
             && item_check_insert(node->obj, obj, NULL) == ITEM_CANNOT_OK) {
             dist = object_dist(obj, node->obj);
             if (nearest_obj == OBJ_HANDLE_NULL
-                || nearest_dist < dist) {
+                || dist < nearest_dist) {
                 nearest_obj = node->obj;
                 nearest_dist = dist;
             }
@@ -848,7 +848,7 @@ void sub_4A92D0(Ai* ai)
 // 0x4A94C0
 void ai_redirect_func(int64_t source_obj, int64_t target_obj)
 {
-    if (obj_field_int32_get(source_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC && source_obj != target_obj) {
+    if (obj_field_int32_get(target_obj, OBJ_F_TYPE) == OBJ_TYPE_NPC && source_obj != target_obj) {
         ai_attack(source_obj, target_obj, LOUDNESS_SILENT, 0);
         obj_field_handle_set(target_obj, OBJ_F_NPC_COMBAT_FOCUS, source_obj);
         obj_field_handle_set(target_obj, OBJ_F_NPC_WHO_HIT_ME_LAST, source_obj);
@@ -882,7 +882,7 @@ void ai_redirect_perform(AiRedirect* ai_redirect)
             && node->obj != ai_redirect->source_obj
             && node->obj != ai_redirect->target_obj
             && (ai_redirect->min_iq <= 0
-                || stat_level_get(ai_redirect->min_iq, STAT_INTELLIGENCE) <= ai_redirect->min_iq)
+                || stat_level_get(ai_redirect->target_obj, STAT_INTELLIGENCE) <= ai_redirect->min_iq)
             && (ai_redirect->critter_flags == 0
                 || (obj_field_int32_get(node->obj, OBJ_F_CRITTER_FLAGS) & ai_redirect->critter_flags) != 0)) {
             ai_redirect_func(ai_redirect->source_obj, node->obj);
@@ -1205,7 +1205,7 @@ void sub_4A9F10(int64_t a1, int64_t a2, int64_t a3, int loudness)
                 sub_4AA620(a1, a2);
             }
         } else if (ai_check_protect(a1, a2) != AI_PROTECT_NO) {
-            if (ai_can_see(a1, a3) == 0 || ai_can_hear(a1, a3, loudness) == 0) {
+            if (ai_can_see(a1, a2) == 0 || ai_can_hear(a1, a2, loudness) == 0) {
                 sub_4AA620(a1, a3);
             }
         } else if (critter_social_class_get(a1) != SOCIAL_CLASS_GUARD
@@ -1483,6 +1483,7 @@ void ai_npc_wait(int64_t obj)
         if (wait < 6) {
             datetime = stru_5B5088[wait];
             timeevent.type = TIMEEVENT_TYPE_NPC_WAIT_HERE;
+            timeevent.params[0].object_value = obj;
             timeevent_add_delay(&timeevent, &datetime);
         }
     }
@@ -2247,10 +2248,10 @@ bool ai_is_stronger(int64_t attacker_obj, int64_t target_obj)
     target_level = stat_level_get(target_obj, STAT_LEVEL);
     attacker_level = stat_level_get(attacker_obj, STAT_LEVEL);
 
-    if (target_level < 20 && target_level >= attacker_level + 10) {
-        return true;
-    } else if (target_level < 40 && target_level >= attacker_level + 5) {
-        return true;
+    if (target_level < 20) {
+        return target_level >= attacker_level + 10;
+    } else if (target_level < 40) {
+        return target_level >= attacker_level + 5;
     } else if (target_level >= attacker_level) {
         return true;
     }
@@ -2428,7 +2429,7 @@ void ai_action_perform_non_combat(Ai* ai)
                 obj_field_int32_set(ai->obj, OBJ_F_NPC_FLAGS, npc_flags);
 
                 if (ai_float_line_func != NULL && critter_is_active(ai->obj)) {
-                    dialog_copy_npc_warning_follow_msg(ai->obj, ai->leader_obj, rc, str, &speech_id);
+                    dialog_copy_npc_wont_follow_msg(ai->obj, ai->leader_obj, rc, str, &speech_id);
                     ai_float_line_func(ai->obj, ai->leader_obj, str, speech_id);
                 }
             } else if ((npc_flags & ONF_CHECK_LEADER) != 0) {
@@ -2492,6 +2493,7 @@ void ai_action_perform_combat(Ai* ai)
         npc_flags |= ONF_BACKING_OFF;
         npc_flags |= ONF_CHECK_GRENADE;
         obj_field_int32_set(ai->obj, OBJ_F_NPC_FLAGS, npc_flags);
+        ai_action_perform_baking_off(ai);
     } else if (!ai_use_grenade(ai, distance)) {
         anim_goal_attack_ex(ai->obj, ai->danger_source, ai->sound_id);
     }
@@ -3428,7 +3430,7 @@ void ai_calc_party_size_and_level_internal(int64_t obj, int* cnt_ptr, int* lvl_p
     node = objects.head;
     while (node != NULL) {
         *cnt_ptr += 1;
-        *lvl_ptr += stat_level_get(obj, STAT_LEVEL);
+        *lvl_ptr += stat_level_get(node->obj, STAT_LEVEL);
         node = node->next;
     }
 
@@ -3577,6 +3579,12 @@ int ai_check_use_skill(int64_t source_obj, int64_t target_obj, int64_t item_obj,
         if (item_obj == OBJ_HANDLE_NULL
             || obj_field_int32_get(item_obj, OBJ_F_TYPE) != OBJ_TYPE_GENERIC
             || (obj_field_int32_get(item_obj, OBJ_F_GENERIC_FLAGS) & OGF_IS_HEALING_ITEM) == 0) {
+            return AI_USE_SKILL_BAD_SOURCE;
+        }
+
+        // The original checks the healer (undead/mechanical critters do not
+        // heal); CE checked the target. Keep both.
+        if ((obj_field_int32_get(source_obj, OBJ_F_CRITTER_FLAGS) & (OCF_UNDEAD | OCF_MECHANICAL)) != 0) {
             return AI_USE_SKILL_BAD_SOURCE;
         }
 

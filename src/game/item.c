@@ -380,7 +380,7 @@ int item_weight(int64_t item_obj, int64_t owner_obj)
     }
 
     if (sub_462410(item_obj, &quantity_fld) != -1) {
-        weight *= obj_field_int32_get(item_obj, quantity_fld) / 4;
+        weight = weight * obj_field_int32_get(item_obj, quantity_fld) / 4;
     }
 
     return weight;
@@ -784,6 +784,19 @@ bool sub_461CA0(int64_t item_obj, int64_t critter_obj, int inventory_location)
     }
 
     if (!object_script_execute(parent_obj, critter_obj, item_obj, SAP_TRANSFER, 0)) {
+        return false;
+    }
+
+    rc = item_check_remove(item_obj);
+    if (rc != ITEM_CANNOT_OK) {
+        if (obj_field_int32_get(parent_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
+            item_error_msg(parent_obj, rc);
+        }
+
+        if (obj_field_int32_get(critter_obj, OBJ_F_TYPE) == OBJ_TYPE_PC) {
+            item_error_msg(critter_obj, rc);
+        }
+
         return false;
     }
 
@@ -1506,11 +1519,10 @@ void item_use_on_obj(int64_t source_obj, int64_t item_obj, int64_t target_obj)
             ui_message.type = UI_MSG_TYPE_EXCLAMATION;
             ui_message.str = mes_file_entry.str;
             ui_display_msg(&ui_message);
-
-            sub_4574D0(item_obj);
-            object_destroy(item_obj);
         }
 
+        sub_4574D0(item_obj);
+        object_destroy(item_obj);
         return;
     }
 
@@ -2724,7 +2736,7 @@ int sub_464D20(int64_t item_obj, int inventory_location, int64_t critter_obj)
             }
         }
 
-        if ((obj_field_int32_get(critter_obj, OBJ_F_CRITTER_FLAGS) & OCF_CRIPPLED_ARMS_BOTH) != 0) {
+        if ((obj_field_int32_get(critter_obj, OBJ_F_CRITTER_FLAGS) & (OCF_CRIPPLED_ARMS_ONE | OCF_CRIPPLED_ARMS_BOTH)) != 0) {
             return ITEM_CANNOT_CRIPPLED;
         }
 
@@ -2895,7 +2907,7 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
                         int max_dam;
 
                         item_weapon_damage(item_obj, critter_obj, damage_type, skill, false, &min_dam, &max_dam);
-                        total_dam = (min_dam + max_dam) / 2;
+                        total_dam += (min_dam + max_dam) / 2;
                     }
 
                     int effectiveness;
@@ -2937,6 +2949,7 @@ void item_wield_best(int64_t critter_obj, int inventory_location, int64_t target
                                 && item_obj > best_ranged_weapon_obj))
                         && item_weapon_range(item_obj, critter_obj) >= dist) {
                         best_ranged_weapon_obj = item_obj;
+                        best_ranged_weapon_worth = effective_total_dam;
                     }
                 }
             } else if (!IS_WEAR_INV_LOC(item_inventory_location_get(item_obj))) {

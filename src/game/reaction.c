@@ -222,7 +222,7 @@ int sub_4C0D00(int64_t npc_obj, int64_t pc_obj, unsigned int flags)
     }
 
     value = sub_4C1500(npc_obj, pc_obj, flags) + sub_4C1290(npc_obj, pc_obj);
-    value = effect_adjust_reaction(npc_obj, value);
+    value = effect_adjust_reaction(pc_obj, value);
 
     if (value < 50
         && sub_459040(npc_obj, OSF_MIND_CONTROLLED, &mind_controlled_by_obj)
