@@ -2238,6 +2238,27 @@ void sub_43E770(int64_t obj, int64_t loc, int offset_x, int offset_y)
         return;
     }
 
+    // Local tweak (debug): log critters that jump more than a few tiles in
+    // one go (follower catch-up, standpoint/waypoint resets, ...), with the
+    // caller, to find out who teleports and why.
+    if (obj_type_is_critter(obj_field_int32_get(obj, OBJ_F_TYPE))) {
+        int64_t from_loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
+        int64_t jump = location_dist(from_loc, loc);
+        if (jump > 3) {
+            char name[MAX_STRING];
+            object_examine(obj, obj, name);
+            tig_debug_printf("Object: jump %d tiles: %s (%d,%d) -> (%d,%d), caller %p (base %p)\n",
+                (int)jump,
+                name,
+                (int)LOCATION_GET_X(from_loc),
+                (int)LOCATION_GET_Y(from_loc),
+                (int)LOCATION_GET_X(loc),
+                (int)LOCATION_GET_Y(loc),
+                __builtin_return_address(0),
+                (void*)sub_43E770);
+        }
+    }
+
     cur_loc = obj_field_int64_get(obj, OBJ_F_LOCATION);
     if (cur_loc == loc) {
         sub_4423E0(obj, offset_x, offset_y);
