@@ -9,6 +9,18 @@
 
 ## What is different from upstream
 
+- **Gamepad support** (DualSense, DualShock 4, Xbox, Switch Pro, Steam Input) as a virtual mouse and
+  keyboard, so every screen works: left stick or touchpad moves the cursor (it pauses on objects),
+  square snaps it to the nearest person, door or container, the d-pad walks between buttons, list rows
+  and inventory items in windows and between replies in conversations, circle closes windows, the
+  right stick pans the map or scrolls lists. Hold L1, L2, R1 or PS for the on-screen button chart.
+- **Unofficial Arcanum Patch 2.0.2 support:** its fixes to the engine and data, and its gameplay
+  changes (ageing, 95% cap on monster resistances, 4 AP per move in turn-based combat, editable
+  follower sheet) under the in-game "UAP Rules" option.
+- **Translated games:** NPC prototypes rebuilt from a translated `rules/npc.txt` keep their gender,
+  race, stats and spells; generic NPCs placed from an opposite-sex template get a description of
+  their own gender.
+- **Automatic resolution** and in-game Options › Video › Scale and Smoothing.
 - **Movies play on macOS.** Bink videos (logos, intro, story cutscenes, endings) are decoded with a
   minimal static FFmpeg (only the Bink demuxer and decoders), with sound.
 - **Sharp, filtered scaling.** The low-res frame is scaled to the screen without blur; optional
@@ -19,6 +31,7 @@
 - **Ctrl+click** moves an item to the other side in loot, barter and steal windows (same as a right
   click, which is awkward on a trackpad).
 - **Autosave** every few minutes into two rotating slots, never over the F7 quick save. See `AutoSave`.
+  Quick saves and autosaves are labelled with the time; dialogue replies can be picked with 1–5.
 - **Cyrillic text input** (cp1251): save names, character name and map notes can be typed in Ukrainian.
 - **Premade characters** take their name from the translated level scheme.
 - **Debug log** in `~/Library/Logs/arcanum-ce.log`, rewritten on every start.
@@ -46,12 +59,15 @@ translation.
 
 | key | meaning |
 |---|---|
-| `Width`, `Height` | internal resolution, scaled to fill the screen (e.g. `1152`×`720` is exactly 3× on a 16" MacBook Pro) |
+| `Width`, `Height` | internal resolution, scaled to fill the screen; `0` = automatic (e.g. `1152`×`720` is exactly 3× on a 16" MacBook Pro) |
 | `Smooth` | `0` plain pixels, `1` xBR, `2` xBRZ (personal builds only, otherwise xBR), `3` ScaleFX on the GPU. **F9** cycles in game |
 | `SmoothUI` | `1` also smooth interface and text, `0` keep them as crisp pixels |
 | `AutoSave` | autosave every N real minutes into two rotating slots, `0` off (default `10`) |
 | `WheelScroll` | map panning speed for two-finger swipes, `0` off, negative inverts |
 | `Renderer` | `0` OpenGL (default), `1` Metal |
+| `Gamepad` | `1` play with a gamepad as mouse and keyboard, `0` off |
+| `GamepadCursorSpeed`, `GamepadPanSpeed` | cursor and map-pan speed at full stick, pixels per second |
+| `ScrollDist` | how far the view may scroll from the character (the original rule, by Perception; applies to arrow keys, screen edges, trackpad and stick), `0` = no limit |
 
 ## Building
 
