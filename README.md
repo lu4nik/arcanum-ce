@@ -1,9 +1,19 @@
 # Arcanum CE — macOS fork (lu4nik)
 
-> A modified build of [Arcanum: Community Edition](https://github.com/alexbatalov/arcanum-ce), free for
-> non-commercial use under the [Sustainable Use License](LICENSE.md). Made with the help of AI (Claude
-> by Anthropic) for playing comfortably on a Mac, in particular with the
-> [Ukrainian translation](https://github.com/lu4nik/arcanum-ua).
+A fan project. I play Arcanum on a Mac, mostly with the
+[Ukrainian translation](https://github.com/lu4nik/arcanum-ua), and this is the engine build I keep
+tweaking until the game is comfortable for me. It does not try to preserve the original experience
+exactly: if something plays nicer another way (a gamepad, trackpad scrolling, autosaves), it gets
+changed. The changes are made with the help of AI (Claude by Anthropic).
+
+Found a bug or want something changed? Open an issue
+([in the translation repo](https://github.com/lu4nik/arcanum-ua/issues), English is fine): I'm happy to
+fix things and try ideas.
+Please don't report problems of this fork to the upstream project: it is not affiliated with it.
+
+Built on [Arcanum: Community Edition](https://github.com/alexbatalov/arcanum-ce), the open-source
+reimplementation of the engine that makes all of this possible; this is a modified build, free for
+non-commercial use under the same [Sustainable Use License](LICENSE.md).
 
 ## What is in this fork
 
