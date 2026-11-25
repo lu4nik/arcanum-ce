@@ -528,6 +528,44 @@ void scroll_fps_set(int fps)
     scroll_fps = 1000 / fps;
 }
 
+// Local tweak: continuous scrolling (gamepad right stick, trackpad) keeps
+// to the same perception-based limit as the arrow keys and screen edges:
+// the view centre stays within 80/40 px per tile of the scroll centre (the
+// player's character). Moving back towards it is always allowed.
+static int64_t scroll_clamp_axis(int64_t center, int64_t delta, int64_t viewport_center, int64_t limit)
+{
+    // After scrolling by `delta` the scroll centre is drawn at center + delta.
+    if (delta > 0 && center + delta > viewport_center + limit) {
+        delta = center < viewport_center + limit ? viewport_center + limit - center : 0;
+    } else if (delta < 0 && center + delta < viewport_center - limit) {
+        delta = center > viewport_center - limit ? viewport_center - limit - center : 0;
+    }
+    return delta;
+}
+
+void scroll_by_limited(int64_t dx, int64_t dy)
+{
+    int distance;
+    int64_t center_x;
+    int64_t center_y;
+
+    distance = scroll_distance_get();
+    if (distance == 0 || scroll_init_info.editor) {
+        scroll_by(dx, dy);
+        return;
+    }
+
+    location_xy(scroll_center, &center_x, &center_y);
+    center_x += 40;
+    center_y += 20;
+
+    dx = scroll_clamp_axis(center_x, dx, scroll_iso_content_rect.width / 2, 80 * distance);
+    dy = scroll_clamp_axis(center_y, dy, scroll_iso_content_rect.height / 2, 40 * distance);
+    if (dx != 0 || dy != 0) {
+        scroll_by(dx, dy);
+    }
+}
+
 /**
  * Sets the maximum scroll distance.
  *

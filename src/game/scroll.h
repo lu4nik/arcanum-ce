@@ -34,6 +34,7 @@ ScrollSpeed scroll_speed_get(void);
 void scroll_start(int direction);
 // Local tweak: exposed for trackpad map panning (main.c).
 void scroll_by(int64_t dx, int64_t dy);
+void scroll_by_limited(int64_t dx, int64_t dy);
 void scroll_stop(void);
 void scroll_fps_set(int fps);
 void scroll_distance_set(int distance);

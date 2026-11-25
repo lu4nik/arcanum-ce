@@ -1230,47 +1230,6 @@ static bool main_gamepad_sticky(void)
         && object_hover_obj_get() != OBJ_HANDLE_NULL;
 }
 
-// Local tweak: stick and trackpad scrolling keep the player's character on
-// screen (ScrollLimit=1, the default): free scrolling made it easy to lose
-// the character and to look over the whole map. Scrolling back towards the
-// character is always allowed; arrow keys and screen edges stay free.
-static void main_scroll_limited(int64_t dx, int64_t dy)
-{
-    const int margin_x = 80;
-    const int margin_top = 80;
-    const int margin_bottom = 200; // the interface bar
-    int64_t pc_obj;
-    TigRect rect;
-    int64_t x;
-    int64_t y;
-
-    pc_obj = player_get_local_pc_obj();
-    if (!highres_config_get()->scroll_limit || pc_obj == OBJ_HANDLE_NULL) {
-        scroll_by(dx, dy);
-        return;
-    }
-
-    object_get_rect(pc_obj, 0, &rect);
-    x = rect.x + rect.width / 2;
-    y = rect.y + rect.height / 2;
-
-    // The view moves the character by (dx, dy) on screen.
-    if (dx > 0 && x + dx > main_iso_width - margin_x) {
-        dx = SDL_max(0, main_iso_width - margin_x - x);
-    } else if (dx < 0 && x + dx < margin_x) {
-        dx = SDL_min(0, margin_x - x);
-    }
-    if (dy > 0 && y + dy > main_iso_height - margin_bottom) {
-        dy = SDL_max(0, main_iso_height - margin_bottom - y);
-    } else if (dy < 0 && y + dy < margin_top) {
-        dy = SDL_min(0, margin_top - y);
-    }
-
-    if (dx != 0 || dy != 0) {
-        scroll_by(dx, dy);
-    }
-}
-
 static void handle_gamepad_pan(void)
 {
     static float rest_x;
@@ -1310,7 +1269,7 @@ static void handle_gamepad_pan(void)
     rest_x -= (float)px;
     rest_y -= (float)py;
     if (px != 0 || py != 0) {
-        main_scroll_limited(px, py);
+        scroll_by_limited(px, py);
     }
 }
 
@@ -1354,6 +1313,6 @@ static void handle_wheel_pan(void)
     rest_x -= (float)px;
     rest_y -= (float)py;
     if (px != 0 || py != 0) {
-        main_scroll_limited(px, py);
+        scroll_by_limited(px, py);
     }
 }
