@@ -2,9 +2,9 @@
 
 #include <stdio.h>
 
-#include "game/gamelib.h"
 #include "game/broadcast.h"
 #include "game/critter.h"
+#include "game/gamelib.h"
 #include "game/hrp.h"
 #include "game/mes.h"
 #include "game/obj.h"

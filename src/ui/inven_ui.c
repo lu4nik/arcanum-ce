@@ -4615,7 +4615,8 @@ void sub_579E30(TigRect* rect)
 // paperdoll slots are targets too, so things can be dragged onto them.
 int inven_ui_gamepad_targets(TigRect* rects, int max)
 {
-    enum { MAX_ITEMS = 128, STEP = 8 };
+    enum { MAX_ITEMS = 128,
+        STEP = 8 };
     int64_t items[MAX_ITEMS];
     int sum_x[MAX_ITEMS];
     int sum_y[MAX_ITEMS];

@@ -2,13 +2,13 @@
 
 #include <stdio.h>
 
-#include "game/gamelib.h"
 #include "game/ai.h"
 #include "game/anim.h"
 #include "game/broadcast.h"
 #include "game/combat.h"
 #include "game/critter.h"
 #include "game/dialog.h"
+#include "game/gamelib.h"
 #include "game/gsound.h"
 #include "game/obj_private.h"
 #include "game/player.h"

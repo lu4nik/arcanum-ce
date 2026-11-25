@@ -8,6 +8,11 @@
 #include "tig/scalefx_gl.h"
 
 #if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
+// macOS only: iOS has no desktop OpenGL.
+#if defined(__APPLE__) && TARGET_OS_OSX
 
 #define GL_SILENCE_DEPRECATION 1
 #include <OpenGL/gl3.h>

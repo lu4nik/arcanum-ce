@@ -106,8 +106,8 @@ if(ARCANUM_XBRZ)
     target_compile_definitions(tig PRIVATE TIG_HAVE_XBRZ)
 endif()
 
-# Local tweak: ScaleFX upscaler uses OpenGL directly.
-if(APPLE)
+# Local tweak: ScaleFX upscaler uses OpenGL directly (macOS only).
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     target_link_libraries(tig PUBLIC "-framework OpenGL")
 endif()
 

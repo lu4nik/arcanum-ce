@@ -69,7 +69,7 @@ jobs:
 
   ios:
     name: iOS
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
       - name: Clone
@@ -173,7 +173,7 @@ jobs:
 
   macos:
     name: macOS
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
       - name: Clone
@@ -224,10 +224,18 @@ jobs:
         uses: actions/cache@v5
         with:
           path: out/build/windows-${{ matrix.arch }}
-          key: windows-${{ matrix.arch }}-cmake-v7
+          key: windows-${{ matrix.arch }}-cmake-v8
 
+      # Fork: the windows-11-arm image ships a newer Visual Studio than the
+      # preset's "Visual Studio 17 2022"; use whatever vswhere reports.
       - name: Configure
-        run: cmake --preset windows-${{ matrix.arch }}
+        run: |
+          vs=$("/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" -latest -property catalog_productLineVersion)
+          gen=()
+          if [ "$vs" = "2026" ]; then
+            gen=(-G "Visual Studio 18 2026")
+          fi
+          cmake --preset windows-${{ matrix.arch }} "${gen[@]}"
 
       - name: Build
         run: cmake --build --preset windows-${{ matrix.arch }}-debug
