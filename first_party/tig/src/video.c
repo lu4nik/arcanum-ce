@@ -543,6 +543,13 @@ static SDL_Texture* tig_video_smooth_frame(void)
         tig_xbr3x(src, src_pitch, w, h, dst, dst_pitch);
     }
 
+    // Local experiment: HD floor tiles over the upscaled lit frame.
+    if (tig_lit25d_mode() != 0) {
+        TigRect keep[64];
+        int num_keep = tig_window_overlay_rects(w, h, keep, 64);
+        tig_lit25d_hd_apply(dst, dst_pitch, w * 3, h * 3, 3, keep, num_keep);
+    }
+
     // Keep the interface and its text crisp: plain 3x pixels over UI windows,
     // only the game world underneath gets smoothed.
     TigRect rects[64];

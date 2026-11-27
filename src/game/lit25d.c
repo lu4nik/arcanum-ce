@@ -38,6 +38,8 @@ typedef struct LitEmitter {
     Uint64 seen;
 } LitEmitter;
 static LitEmitter lit25d_emitters[LIT25D_MAX_EMITTERS];
+static int lit25d_tile_x;
+static int lit25d_tile_y;
 static void lit25d_add_emitters(TigLit25dFrame* frame, int num_static);
 
 static void lit25d_destroy_buffer(void)
@@ -280,6 +282,8 @@ static bool lit25d_provide(TigLit25dFrame* frame)
     frame->width = vb_data.width;
     frame->height = vb_data.height;
     frame->origin_y = lit25d_origin_y;
+    frame->tile_x = lit25d_tile_x + LIT25D_MARGIN;
+    frame->tile_y = lit25d_tile_y + LIT25D_MARGIN;
 
     frame->ambient = lit25d_brightness(light_get_outdoor_color());
     // Sun shadows fade in from dusk to full day.
@@ -717,4 +721,274 @@ void lit25d_ui_end(GameDrawInfo* draw_info)
     }
     tig_video_buffer_unlock(lit25d_gbuf);
     tig_video_buffer_unlock(vb);
+}
+
+// Tile dump for the HD-tile experiment: if the game folder has a directory
+// called lit25d_tiles, every floor tile drawn is saved there once, in its
+// original colours (no light tint), as <art id>.bmp. Magenta = transparent.
+void lit25d_tile_seen(tig_art_id_t art_id)
+{
+    static int enabled = -1;
+    static tig_art_id_t seen[8192];
+    TigArtFrameData fd;
+    TigVideoBufferCreateInfo vb_info;
+    TigVideoBuffer* vb;
+
+    if (enabled < 0) {
+        SDL_PathInfo info;
+        enabled = SDL_GetPathInfo("lit25d_tiles", &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+        if (enabled) {
+            tig_debug_printf("Lit25d: dumping floor tiles to lit25d_tiles/\n");
+        }
+    }
+    if (!enabled || art_id == 0 || art_id == TIG_ART_ID_INVALID) {
+        return;
+    }
+
+    unsigned int h = (art_id * 2654435761u) & 8191u;
+    for (int i = 0; i < 8192; i++) {
+        unsigned int k = (h + (unsigned int)i) & 8191u;
+        if (seen[k] == art_id) {
+            return;
+        }
+        if (seen[k] == 0) {
+            seen[k] = art_id;
+            break;
+        }
+    }
+
+    if (tig_art_frame_data(art_id, &fd) != TIG_OK || fd.width <= 0 || fd.height <= 0) {
+        return;
+    }
+
+    vb_info.flags = TIG_VIDEO_BUFFER_CREATE_SYSTEM_MEMORY;
+    vb_info.width = fd.width;
+    vb_info.height = fd.height;
+    vb_info.background_color = tig_color_make(255, 0, 255);
+    vb_info.color_key = 0;
+    if (tig_video_buffer_create(&vb_info, &vb) != TIG_OK) {
+        return;
+    }
+    tig_video_buffer_fill(vb, NULL, tig_color_make(255, 0, 255));
+
+    TigRect rect = { 0, 0, fd.width, fd.height };
+    TigArtBlitInfo blit;
+    SDL_zero(blit);
+    blit.flags = TIG_ART_BLT_PALETTE_ORIGINAL;
+    blit.art_id = art_id;
+    blit.src_rect = &rect;
+    blit.dst_rect = &rect;
+    blit.dst_video_buffer = vb;
+    if (tig_art_blit(&blit) == TIG_OK) {
+        TigVideoBufferSaveToBmpInfo save;
+        SDL_zero(save);
+        save.video_buffer = vb;
+        save.rect = &rect;
+        SDL_snprintf(save.path, sizeof(save.path), "lit25d_tiles/%08X.bmp", (unsigned int)art_id);
+        tig_video_buffer_save_to_bmp(&save);
+    }
+    tig_video_buffer_destroy(vb);
+}
+
+// Floor capture for the HD-tile experiment (Shift+F10): the next full redraw
+// also draws every floor tile, untinted and unclipped, into a window-sized
+// buffer, saved as lit25d_ground/ground_NNN.bmp with ground_NNN.txt listing
+// "art_id x y" for each tile. The upscaler cuts HD tiles back out of it.
+static bool lit25d_capture_pending;
+static bool lit25d_capturing;
+static TigVideoBuffer* lit25d_capture_vb;
+static SDL_IOStream* lit25d_capture_list;
+static char lit25d_capture_name[64];
+
+void lit25d_capture_request(void)
+{
+    lit25d_capture_pending = true;
+    TigRect rect = { 0, 0, lit25d_window_rect.width, lit25d_window_rect.height };
+    gamelib_invalidate_rect(&rect);
+}
+
+void lit25d_capture_begin(void)
+{
+    TigVideoBufferCreateInfo vb_info;
+
+    if (!lit25d_capture_pending) {
+        return;
+    }
+    lit25d_capture_pending = false;
+    SDL_CreateDirectory("lit25d_ground");
+
+    for (int n = 0; n < 1000; n++) {
+        char path[96];
+        SDL_PathInfo info;
+        SDL_snprintf(lit25d_capture_name, sizeof(lit25d_capture_name), "lit25d_ground/ground_%03d", n);
+        SDL_snprintf(path, sizeof(path), "%s.bmp", lit25d_capture_name);
+        if (!SDL_GetPathInfo(path, &info)) {
+            break;
+        }
+    }
+
+    vb_info.flags = TIG_VIDEO_BUFFER_CREATE_SYSTEM_MEMORY;
+    vb_info.width = lit25d_window_rect.width;
+    vb_info.height = lit25d_window_rect.height;
+    vb_info.background_color = tig_color_make(255, 0, 255);
+    vb_info.color_key = 0;
+    if (tig_video_buffer_create(&vb_info, &lit25d_capture_vb) != TIG_OK) {
+        return;
+    }
+    tig_video_buffer_fill(lit25d_capture_vb, NULL, tig_color_make(255, 0, 255));
+
+    char list_path[96];
+    SDL_snprintf(list_path, sizeof(list_path), "%s.txt", lit25d_capture_name);
+    lit25d_capture_list = SDL_IOFromFile(list_path, "w");
+    lit25d_capturing = true;
+}
+
+void lit25d_tile_placed(tig_art_id_t art_id, const TigRect* rect)
+{
+    // Any tile's position fixes the floor lattice for the HD pass.
+    lit25d_tile_x = rect->x;
+    lit25d_tile_y = rect->y;
+
+    if (!lit25d_capturing || lit25d_capture_vb == NULL) {
+        return;
+    }
+
+    TigRect dst = *rect;
+    TigRect src = { 0, 0, rect->width, rect->height };
+    TigArtBlitInfo blit;
+    SDL_zero(blit);
+    blit.flags = TIG_ART_BLT_PALETTE_ORIGINAL;
+    blit.art_id = art_id;
+    blit.src_rect = &src;
+    blit.dst_rect = &dst;
+    blit.dst_video_buffer = lit25d_capture_vb;
+    tig_art_blit(&blit);
+
+    if (lit25d_capture_list != NULL) {
+        SDL_IOprintf(lit25d_capture_list, "%08X %d %d\n", (unsigned int)art_id, rect->x, rect->y);
+    }
+}
+
+void lit25d_capture_end(void)
+{
+    if (!lit25d_capturing) {
+        return;
+    }
+    lit25d_capturing = false;
+
+    if (lit25d_capture_vb != NULL) {
+        TigVideoBufferSaveToBmpInfo save;
+        SDL_zero(save);
+        save.video_buffer = lit25d_capture_vb;
+        SDL_snprintf(save.path, sizeof(save.path), "%s.bmp", lit25d_capture_name);
+        tig_video_buffer_save_to_bmp(&save);
+        tig_video_buffer_destroy(lit25d_capture_vb);
+        lit25d_capture_vb = NULL;
+        tig_debug_printf("Lit25d: floor saved to %s.bmp\n", lit25d_capture_name);
+    }
+    if (lit25d_capture_list != NULL) {
+        SDL_CloseIO(lit25d_capture_list);
+        lit25d_capture_list = NULL;
+    }
+}
+
+// HD floor tiles (lit25d_hd/atlas.bin, made by the upscaler): sorted art ids
+// and their images. A tile's slot + 1 goes into its floor pixels' G-buffer
+// code, the HD pass on the upscaled frame draws the HD image there.
+static uint32_t* lit25d_hd_ids;
+static int lit25d_hd_count;
+
+static void lit25d_hd_load(void)
+{
+    static bool tried;
+    SDL_IOStream* io;
+    uint32_t head[4];
+
+    if (tried) {
+        return;
+    }
+    tried = true;
+
+    io = SDL_IOFromFile("lit25d_hd/atlas.bin", "rb");
+    if (io == NULL) {
+        return;
+    }
+    if (SDL_ReadIO(io, head, sizeof(head)) == sizeof(head) && head[0] == 0x4135324Cu /* L25A */
+        && head[3] > 0 && head[3] < 65535) {
+        int w = (int)head[1];
+        int h = (int)head[2];
+        int n = (int)head[3];
+        size_t pixels = (size_t)w * (size_t)h * 4 * (size_t)n;
+        uint32_t* ids = (uint32_t*)SDL_malloc(sizeof(uint32_t) * (size_t)n);
+        uint8_t* rgba = (uint8_t*)SDL_malloc(pixels);
+        if (ids != NULL && rgba != NULL
+            && SDL_ReadIO(io, ids, sizeof(uint32_t) * (size_t)n) == sizeof(uint32_t) * (size_t)n
+            && SDL_ReadIO(io, rgba, pixels) == pixels) {
+            tig_lit25d_set_hd_atlas(rgba, w, h, n);
+            lit25d_hd_ids = ids;
+            lit25d_hd_count = n;
+            ids = NULL;
+            tig_debug_printf("Lit25d: %d HD floor tiles\n", n);
+        }
+        SDL_free(ids);
+        SDL_free(rgba);
+    }
+    SDL_CloseIO(io);
+}
+
+int lit25d_hd_slot(tig_art_id_t art_id)
+{
+    lit25d_hd_load();
+    int lo = 0;
+    int hi = lit25d_hd_count - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (lit25d_hd_ids[mid] == (uint32_t)art_id) {
+            return mid;
+        }
+        if (lit25d_hd_ids[mid] < (uint32_t)art_id) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    return -1;
+}
+
+// Floor tile into the G-buffer: class 0 (ground), the indoor flag and the HD
+// slot (+1) in the low 16 bits.
+void lit25d_blit_floor(const TigArtBlitInfo* blit_info, bool indoor, int slot)
+{
+    TigArtBlitInfo info;
+    TigRect src_rect;
+    TigRect dst_rect;
+    uint32_t code;
+
+    if (!lit25d_active()) {
+        return;
+    }
+
+    code = (uint32_t)(slot + 1) & 0xFFFFu;
+    if (indoor) {
+        code |= (uint32_t)TIG_LIT25D_INDOOR << TIG_LIT25D_CLASS_SHIFT;
+    }
+    if (code == 0) {
+        return;
+    }
+    for (int i = 0; i < 256; i++) {
+        lit25d_palette.colors[i] = code;
+    }
+
+    info = *blit_info;
+    src_rect = *blit_info->src_rect;
+    dst_rect = *blit_info->dst_rect;
+    dst_rect.x += LIT25D_MARGIN;
+    dst_rect.y += LIT25D_MARGIN;
+    info.flags = (blit_info->flags & (TIG_ART_BLT_FLIP_X | TIG_ART_BLT_FLIP_Y)) | TIG_ART_BLT_PALETTE_OVERRIDE;
+    info.palette = &lit25d_palette;
+    info.src_rect = &src_rect;
+    info.dst_rect = &dst_rect;
+    info.dst_video_buffer = lit25d_gbuf;
+    info.scratch_video_buffer = NULL;
+    tig_art_blit(&info);
 }

@@ -49,6 +49,7 @@ typedef struct LitUniforms {
     float grade[4];
     float params[4]; // ambient, sun, time, night
     int32_t iparams[4]; // origin, mode, number of lights
+    float hd[4]; // tile top-left x, y (G-buffer), scale, layers
     float lpos[TIG_LIT25D_MAX_LIGHTS * 4];
     float lcol[TIG_LIT25D_MAX_LIGHTS * 4];
 } LitUniforms;
@@ -56,6 +57,17 @@ typedef struct LitUniforms {
 static SDL_GPUDevice* lit_device;
 static SDL_GPUGraphicsPipeline* lit_geo_pipeline;
 static SDL_GPUGraphicsPipeline* lit_light_pipeline;
+static SDL_GPUGraphicsPipeline* lit_hd_pipeline;
+static SDL_GPUSampler* lit_linear;
+static SDL_GPUTexture* lit_atlas;
+static uint8_t* lit_atlas_pending;
+static int lit_atlas_w, lit_atlas_h, lit_atlas_layers;
+static SDL_GPUTexture* lit_up_tex;
+static SDL_GPUTexture* lit_hd_out;
+static SDL_GPUTransferBuffer* lit_hd_upbuf;
+static SDL_GPUTransferBuffer* lit_hd_downbuf;
+static int lit_hd_w, lit_hd_h;
+static uint32_t* lit_hd_tmp;
 static SDL_GPUSampler* lit_sampler;
 static SDL_GPUTexture* lit_color_tex;
 static SDL_GPUTexture* lit_out_tex;
@@ -249,12 +261,14 @@ static bool lit_init(void)
     SDL_GPUShader* vs = lit_shader("lit25d_vert", lit25d_vert_msl, lit25d_vert_hlsl, true, 0);
     SDL_GPUShader* geo = lit_shader("lit25d_geo", lit25d_geo_msl, lit25d_geo_hlsl, false, 1);
     SDL_GPUShader* light = lit_shader("lit25d_light", lit25d_light_msl, lit25d_light_hlsl, false, 3);
-    bool ok = vs != NULL && geo != NULL && light != NULL;
+    SDL_GPUShader* hd = lit_shader("lit25d_hd", lit25d_hd_msl, lit25d_hd_hlsl, false, 4);
+    bool ok = vs != NULL && geo != NULL && light != NULL && hd != NULL;
 
     if (ok) {
         lit_geo_pipeline = lit_pipeline(vs, geo, SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT);
         lit_light_pipeline = lit_pipeline(vs, light, SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM);
-        ok = lit_geo_pipeline != NULL && lit_light_pipeline != NULL;
+        lit_hd_pipeline = lit_pipeline(vs, hd, SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM);
+        ok = lit_geo_pipeline != NULL && lit_light_pipeline != NULL && lit_hd_pipeline != NULL;
         if (!ok) {
             SDL_Log("Lit25d: pipeline: %s", SDL_GetError());
         }
@@ -262,6 +276,7 @@ static bool lit_init(void)
     if (vs != NULL) SDL_ReleaseGPUShader(lit_device, vs);
     if (geo != NULL) SDL_ReleaseGPUShader(lit_device, geo);
     if (light != NULL) SDL_ReleaseGPUShader(lit_device, light);
+    if (hd != NULL) SDL_ReleaseGPUShader(lit_device, hd);
 
     if (ok) {
         SDL_GPUSamplerCreateInfo sampler;
@@ -273,7 +288,10 @@ static bool lit_init(void)
         sampler.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
         sampler.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
         lit_sampler = SDL_CreateGPUSampler(lit_device, &sampler);
-        ok = lit_sampler != NULL;
+        sampler.min_filter = SDL_GPU_FILTER_LINEAR;
+        sampler.mag_filter = SDL_GPU_FILTER_LINEAR;
+        lit_linear = SDL_CreateGPUSampler(lit_device, &sampler);
+        ok = lit_sampler != NULL && lit_linear != NULL;
     }
 
     if (!ok) {
@@ -423,6 +441,10 @@ static void lit_fill_uniforms(void)
     u->iparams[0] = lit_frame.origin_y;
     u->iparams[1] = lit_mode;
     u->iparams[2] = n;
+    u->hd[0] = (float)lit_frame.tile_x;
+    u->hd[1] = (float)lit_frame.tile_y;
+    u->hd[2] = 3.0f;
+    u->hd[3] = (float)lit_atlas_layers;
     for (int i = 0; i < n; i++) {
         const TigLit25dLight* l = &lit_frame.lights[i];
         u->lpos[i * 4 + 0] = l->x;
@@ -558,7 +580,227 @@ void tig_lit25d_exit(void)
         SDL_ReleaseGPUSampler(lit_device, lit_sampler);
         lit_sampler = NULL;
     }
+    if (lit_linear != NULL) {
+        SDL_ReleaseGPUSampler(lit_device, lit_linear);
+        lit_linear = NULL;
+    }
+    if (lit_hd_pipeline != NULL) {
+        SDL_ReleaseGPUGraphicsPipeline(lit_device, lit_hd_pipeline);
+        lit_hd_pipeline = NULL;
+    }
+    SDL_GPUTexture** hd_textures[] = { &lit_atlas, &lit_up_tex, &lit_hd_out };
+    for (size_t i = 0; i < SDL_arraysize(hd_textures); i++) {
+        if (*hd_textures[i] != NULL) {
+            SDL_ReleaseGPUTexture(lit_device, *hd_textures[i]);
+            *hd_textures[i] = NULL;
+        }
+    }
+    if (lit_hd_upbuf != NULL) SDL_ReleaseGPUTransferBuffer(lit_device, lit_hd_upbuf);
+    if (lit_hd_downbuf != NULL) SDL_ReleaseGPUTransferBuffer(lit_device, lit_hd_downbuf);
+    lit_hd_upbuf = lit_hd_downbuf = NULL;
+    lit_hd_w = lit_hd_h = 0;
     SDL_DestroyGPUDevice(lit_device);
     lit_device = NULL;
     lit_ready = false;
+}
+
+void tig_lit25d_set_hd_atlas(const uint8_t* rgba, int w, int h, int layers)
+{
+    SDL_free(lit_atlas_pending);
+    lit_atlas_pending = NULL;
+    lit_atlas_layers = 0;
+    if (rgba == NULL || w <= 0 || h <= 0 || layers <= 0) {
+        return;
+    }
+    size_t size = (size_t)w * (size_t)h * 4 * (size_t)layers;
+    lit_atlas_pending = (uint8_t*)SDL_malloc(size);
+    if (lit_atlas_pending == NULL) {
+        return;
+    }
+    SDL_memcpy(lit_atlas_pending, rgba, size);
+    lit_atlas_w = w;
+    lit_atlas_h = h;
+    lit_atlas_layers = layers;
+}
+
+// Uploads the pending atlas (once), layer by layer.
+static bool lit_hd_atlas_ready(void)
+{
+    if (lit_atlas != NULL) {
+        return true;
+    }
+    if (lit_atlas_pending == NULL) {
+        return false;
+    }
+
+    SDL_GPUTextureCreateInfo info;
+    SDL_zero(info);
+    info.type = SDL_GPU_TEXTURETYPE_2D_ARRAY;
+    info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    info.width = (Uint32)lit_atlas_w;
+    info.height = (Uint32)lit_atlas_h;
+    info.layer_count_or_depth = (Uint32)lit_atlas_layers;
+    info.num_levels = 1;
+    lit_atlas = SDL_CreateGPUTexture(lit_device, &info);
+    if (lit_atlas == NULL) {
+        SDL_Log("Lit25d: atlas: %s", SDL_GetError());
+        return false;
+    }
+
+    size_t layer_size = (size_t)lit_atlas_w * (size_t)lit_atlas_h * 4;
+    SDL_GPUTransferBuffer* tb = lit_transfer(SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD, (int)layer_size);
+    if (tb == NULL) {
+        return false;
+    }
+    for (int layer = 0; layer < lit_atlas_layers; layer++) {
+        uint8_t* up = (uint8_t*)SDL_MapGPUTransferBuffer(lit_device, tb, true);
+        if (up == NULL) {
+            break;
+        }
+        SDL_memcpy(up, lit_atlas_pending + layer_size * (size_t)layer, layer_size);
+        SDL_UnmapGPUTransferBuffer(lit_device, tb);
+
+        SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(lit_device);
+        SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(cmd);
+        SDL_GPUTextureTransferInfo src;
+        SDL_GPUTextureRegion region;
+        SDL_zero(src);
+        src.transfer_buffer = tb;
+        src.pixels_per_row = (Uint32)lit_atlas_w;
+        src.rows_per_layer = (Uint32)lit_atlas_h;
+        SDL_zero(region);
+        region.texture = lit_atlas;
+        region.layer = (Uint32)layer;
+        region.w = (Uint32)lit_atlas_w;
+        region.h = (Uint32)lit_atlas_h;
+        region.d = 1;
+        SDL_UploadToGPUTexture(copy, &src, &region, false);
+        SDL_EndGPUCopyPass(copy);
+        SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+        if (fence != NULL) {
+            SDL_WaitForGPUFences(lit_device, true, &fence, 1);
+            SDL_ReleaseGPUFence(lit_device, fence);
+        }
+    }
+    SDL_ReleaseGPUTransferBuffer(lit_device, tb);
+    SDL_free(lit_atlas_pending);
+    lit_atlas_pending = NULL;
+    SDL_Log("Lit25d: HD atlas %dx%d x %d tiles", lit_atlas_w, lit_atlas_h, lit_atlas_layers);
+    return true;
+}
+
+typedef struct LitKeepRect {
+    int x, y, width, height;
+} LitKeepRect;
+
+void tig_lit25d_hd_apply(uint32_t* frame, int pitch_px, int w, int h, int scale, const void* keep_rects, int num_keep_rects)
+{
+    if (!lit_ready || lit_mode == 0 || lit_atlas_layers == 0 || scale != 3
+        || lit_out_tex == NULL || w != lit_w * scale || h != lit_h * scale) {
+        return;
+    }
+    if (!lit_hd_atlas_ready()) {
+        return;
+    }
+
+    if (w != lit_hd_w || h != lit_hd_h) {
+        if (lit_up_tex != NULL) SDL_ReleaseGPUTexture(lit_device, lit_up_tex);
+        if (lit_hd_out != NULL) SDL_ReleaseGPUTexture(lit_device, lit_hd_out);
+        if (lit_hd_upbuf != NULL) SDL_ReleaseGPUTransferBuffer(lit_device, lit_hd_upbuf);
+        if (lit_hd_downbuf != NULL) SDL_ReleaseGPUTransferBuffer(lit_device, lit_hd_downbuf);
+        SDL_free(lit_hd_tmp);
+        lit_up_tex = lit_texture(SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM, w, h, false);
+        lit_hd_out = lit_texture(SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM, w, h, true);
+        lit_hd_upbuf = lit_transfer(SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD, w * h * 4);
+        lit_hd_downbuf = lit_transfer(SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD, w * h * 4);
+        lit_hd_tmp = (uint32_t*)SDL_malloc((size_t)w * (size_t)h * 4);
+        lit_hd_w = w;
+        lit_hd_h = h;
+    }
+    if (lit_up_tex == NULL || lit_hd_out == NULL || lit_hd_upbuf == NULL || lit_hd_downbuf == NULL || lit_hd_tmp == NULL) {
+        return;
+    }
+
+    SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(lit_device);
+    if (cmd == NULL) {
+        return;
+    }
+    SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(cmd);
+    lit_upload(copy, lit_hd_upbuf, lit_up_tex, frame, pitch_px, w, h);
+    SDL_EndGPUCopyPass(copy);
+
+    SDL_GPUColorTargetInfo target;
+    SDL_zero(target);
+    target.texture = lit_hd_out;
+    target.load_op = SDL_GPU_LOADOP_DONT_CARE;
+    target.store_op = SDL_GPU_STOREOP_STORE;
+    SDL_PushGPUFragmentUniformData(cmd, 0, &lit_uniforms, sizeof(lit_uniforms));
+    SDL_GPURenderPass* rp = SDL_BeginGPURenderPass(cmd, &target, 1, NULL);
+    SDL_BindGPUGraphicsPipeline(rp, lit_hd_pipeline);
+    SDL_GPUTextureSamplerBinding bind[4] = {
+        { lit_up_tex, lit_sampler },
+        { lit_out_tex, lit_linear },
+        { lit_gbuf_tex, lit_sampler },
+        { lit_atlas, lit_linear },
+    };
+    SDL_BindGPUFragmentSamplers(rp, 0, bind, 4);
+    SDL_DrawGPUPrimitives(rp, 3, 1, 0, 0);
+    SDL_EndGPURenderPass(rp);
+
+    copy = SDL_BeginGPUCopyPass(cmd);
+    SDL_GPUTextureRegion region;
+    SDL_GPUTextureTransferInfo dst_info;
+    SDL_zero(region);
+    region.texture = lit_hd_out;
+    region.w = (Uint32)w;
+    region.h = (Uint32)h;
+    region.d = 1;
+    SDL_zero(dst_info);
+    dst_info.transfer_buffer = lit_hd_downbuf;
+    dst_info.pixels_per_row = (Uint32)w;
+    dst_info.rows_per_layer = (Uint32)h;
+    SDL_DownloadFromGPUTexture(copy, &region, &dst_info);
+    SDL_EndGPUCopyPass(copy);
+
+    SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+    if (fence == NULL) {
+        return;
+    }
+    SDL_WaitForGPUFences(lit_device, true, &fence, 1);
+    SDL_ReleaseGPUFence(lit_device, fence);
+
+    const uint32_t* down = (const uint32_t*)SDL_MapGPUTransferBuffer(lit_device, lit_hd_downbuf, false);
+    if (down == NULL) {
+        return;
+    }
+
+    // Keep the interface: remember what is under the keep rects, write the
+    // whole frame, then put those pixels back.
+    const LitKeepRect* keep = (const LitKeepRect*)keep_rects;
+    for (int y = 0; y < h; y++) {
+        uint32_t* row = frame + (size_t)y * (size_t)pitch_px;
+        const uint32_t* src = down + (size_t)y * (size_t)w;
+        int gy = y / scale;
+        int x = 0;
+        while (x < w) {
+            int gx = x / scale;
+            int skip_to = -1;
+            for (int r = 0; r < num_keep_rects; r++) {
+                if (gx >= keep[r].x && gx < keep[r].x + keep[r].width
+                    && gy >= keep[r].y && gy < keep[r].y + keep[r].height) {
+                    skip_to = (keep[r].x + keep[r].width) * scale;
+                    break;
+                }
+            }
+            if (skip_to > x) {
+                x = skip_to;
+                continue;
+            }
+            row[x] = src[x] | 0xFF000000u;
+            x++;
+        }
+    }
+    SDL_UnmapGPUTransferBuffer(lit_device, lit_hd_downbuf);
+    (void)lit_hd_tmp;
 }

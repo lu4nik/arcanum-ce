@@ -698,10 +698,12 @@ void tile_draw_iso(GameDrawInfo* draw_info)
                     for (v42 = 0; v42 < v3->num_hor_tiles[v15]; v42++) {
                         blit_info_initialized = false;
                         art_blit_info.art_id = sectors[v15]->tiles.art_ids[indexes[v15]];
+                        lit25d_tile_seen(art_blit_info.art_id);
                         tile_type = tig_art_tile_id_type_get(art_blit_info.art_id);
                         if (!roof_is_covered_xy(center_x + 40, center_y + 20, false)) {
                             tile_rect.x = center_x + 1;
                             tile_rect.y = center_y;
+                            lit25d_tile_placed(art_blit_info.art_id, &tile_rect);
 
                             rect_node = *draw_info->rects;
                             while (rect_node != NULL) {
@@ -736,7 +738,8 @@ void tile_draw_iso(GameDrawInfo* draw_info)
                                     }
 
                                     // Local experiment (lit25d): mark indoor floor so the sun skips it.
-                                    if (tile_type == 0 && lit25d_active()) {
+                                    int lit_slot = lit25d_active() ? lit25d_hd_slot(art_blit_info.art_id) : -1;
+                                    if ((tile_type == 0 || lit_slot >= 0) && lit25d_active()) {
                                         TigArtBlitInfo lit_info = art_blit_info;
                                         TigRect lit_dst;
                                         TigRect lit_src;
@@ -748,7 +751,7 @@ void tile_draw_iso(GameDrawInfo* draw_info)
                                             lit_info.flags = 0;
                                             lit_info.src_rect = &lit_src;
                                             lit_info.dst_rect = &lit_dst;
-                                            lit25d_blit(&lit_info, 0, TIG_LIT25D_INDOOR);
+                                            lit25d_blit_floor(&lit_info, tile_type == 0, lit_slot);
                                         }
                                     }
 

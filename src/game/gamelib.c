@@ -895,7 +895,9 @@ bool gamelib_draw(void)
                 lit25d_clear(&(dirty->rect));
             }
         }
+        lit25d_capture_begin();
         gamelib_draw_func(&draw_info);
+        lit25d_capture_end();
         if (lit25d_active()) {
             lit25d_draw_margin(&draw_info);
         }

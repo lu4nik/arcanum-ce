@@ -51,6 +51,8 @@ typedef struct TigLit25dFrame {
     float sun_reach; // how far shadows are traced, world units
     float grade[3]; // outdoor colour grade for the time of day
     float night; // 0 day .. 1 night
+    int tile_x; // G-buffer coords of some floor tile's top-left (HD tiles)
+    int tile_y;
     int num_lights;
     TigLit25dLight lights[TIG_LIT25D_MAX_LIGHTS];
 } TigLit25dFrame;
@@ -65,6 +67,15 @@ void tig_lit25d_set_provider(TigLit25dProvider provider);
 // Lights `src` into `dst` (same size, XRGB8888). Returns false when the pass is
 // unavailable; `dst` is then untouched.
 bool tig_lit25d_apply(const uint32_t* src, int src_pitch_px, int w, int h, uint32_t* dst, int dst_pitch_px);
+
+// HD floor tiles: `layers` RGBA images of w x h, one per slot (slot + 1 is
+// what the game writes into the low 16 bits of a floor pixel's G-buffer code).
+// The pixels are copied.
+void tig_lit25d_set_hd_atlas(const uint8_t* rgba, int w, int h, int layers);
+
+// Redraws HD floor in an upscaled copy of the last lit frame (in place).
+// `scale` is the upscale factor; rects in game pixels are left alone (UI).
+void tig_lit25d_hd_apply(uint32_t* frame, int pitch_px, int w, int h, int scale, const void* keep_rects, int num_keep_rects);
 
 // Releases the GPU device and its resources.
 void tig_lit25d_exit(void);

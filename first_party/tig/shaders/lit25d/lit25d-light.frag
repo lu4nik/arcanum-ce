@@ -9,6 +9,7 @@ layout(std140, set = 3, binding = 0) uniform LitUniforms {
     vec4 u_grade;     // xyz = outdoor colour grade
     vec4 u_params;    // x = ambient, y = sun, z = time (s), w = night
     ivec4 u_iparams;  // x = origin, y = mode, z = number of lights
+    vec4 u_hd;        // HD tiles: x, y = a tile's top-left (G-buffer), z = scale, w = layers
     vec4 u_lpos[64];  // x, y (G-buffer), z, radius
     vec4 u_lcol[64];  // rgb, a = flicker
 };

@@ -600,6 +600,11 @@ void main_loop(void)
                         main_cycle_smooth();
                         break;
                     case SDL_SCANCODE_F10:
+                        if (tig_kb_get_modifier(SDL_KMOD_SHIFT)) {
+                            // Local experiment: save the floor layer for HD tiles.
+                            lit25d_capture_request();
+                            break;
+                        }
                         intgame_toggle_interface();
                         tig_debug_printf("iso_redraw...");
                         iso_redraw();

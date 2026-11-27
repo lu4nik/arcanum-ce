@@ -19,6 +19,7 @@ SHADERS = [
     ("lit25d_vert", "lit25d.vert", "vert"),
     ("lit25d_geo", "lit25d-geo.frag", "frag"),
     ("lit25d_light", "lit25d-light.frag", "frag"),
+    ("lit25d_hd", "lit25d-hd.frag", "frag"),
 ]
 
 
