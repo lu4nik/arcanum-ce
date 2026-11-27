@@ -2,6 +2,13 @@
 
 #include <inttypes.h>
 
+#ifdef _MSC_VER
+#include <intrin.h>
+#define OBJECT_RETURN_ADDRESS() _ReturnAddress()
+#else
+#define OBJECT_RETURN_ADDRESS() __builtin_return_address(0)
+#endif
+
 #include "game/ai.h"
 #include "game/anim.h"
 #include "game/critter.h"
@@ -2254,7 +2261,7 @@ void sub_43E770(int64_t obj, int64_t loc, int offset_x, int offset_y)
                 (int)LOCATION_GET_Y(from_loc),
                 (int)LOCATION_GET_X(loc),
                 (int)LOCATION_GET_Y(loc),
-                __builtin_return_address(0),
+                OBJECT_RETURN_ADDRESS(),
                 (void*)sub_43E770);
         }
     }
