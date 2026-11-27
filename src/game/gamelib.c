@@ -1737,9 +1737,11 @@ void gamelib_draw_game(GameDrawInfo* draw_info)
         sub_43C690(draw_info);
         object_draw(draw_info);
         roof_draw(draw_info);
+        lit25d_ui_begin(draw_info);
         tb_draw(draw_info);
         tf_draw(draw_info);
         tc_draw(draw_info);
+        lit25d_ui_end(draw_info);
         tig_video_3d_end_scene();
     }
 }

@@ -36,7 +36,7 @@ void main() {
     uint c = code_at(q);
     uint cls = cls_of(c);
     float y = float(q.y);
-    if (c == NONE || cls == 0u) { frag = vec4(y, 0.0, 0.0, 1.0); return; }
+    if (c == NONE || cls == 0u || cls == 15u) { frag = vec4(y, 0.0, 0.0, 1.0); return; }
     if (cls == 4u) { frag = vec4(y + ROOF_H, ROOF_H, 4.0, 1.0); return; }
     float a = anchor_of(c);
     if (cls == 3u) {

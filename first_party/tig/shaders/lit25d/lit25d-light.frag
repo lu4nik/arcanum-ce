@@ -39,6 +39,9 @@ vec3 world_at(ivec2 q) {
 float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
 ivec2 project(vec3 w) { return ivec2(floor(vec2(w.x, w.y * 0.5 - w.z) + 0.5)); }
 
+// Class of the pixel being lit; walls don't shade themselves through their
+// neighbouring pieces.
+uint g_rcls;
 float trace(vec3 from, vec3 to, uint self_code, int steps, float j) {
     float occ = 0.0;
     bool raised = from.z > 0.5;
@@ -49,9 +52,10 @@ float trace(vec3 from, vec3 to, uint self_code, int steps, float j) {
         uint c = code_at(sp);
         if (c == NONE || c == self_code) continue;
         uint cls = cls_of(c);
-        if (cls == 0u || cls == 4u) continue;
+        if (cls == 0u || cls == 4u || cls == 15u) continue;
         vec3 o = world_at(sp);
         cls = cls_of(c);
+        if (g_rcls == 3u && cls == 3u && length(o.xy - from.xy) < 90.0) continue;
         if (raised && abs(o.y - from.y) < (cls == 1u ? 46.0 : 16.0)) continue;
         float dy = abs(o.y - s.y);
         float th = cls == 3u ? THICK * 1.6 : THICK;
@@ -66,7 +70,8 @@ float solid_at(vec3 s, uint self_code) {
     uint c = code_at(sp);
     if (c == NONE || c == self_code) return 0.0;
     uint cls = cls_of(c);
-    if (cls == 0u || cls == 4u) return 0.0;
+    if (cls == 0u || cls == 4u || cls == 15u) return 0.0;
+    if (g_rcls == 3u && cls == 3u) return 0.0;
     vec3 o = world_at(sp);
     return 1.0 - smoothstep(THICK * 0.6, THICK * 1.4, abs(o.y - s.y));
 }
@@ -89,7 +94,10 @@ void main() {
     ivec2 q = p - u_rect.xy;
     uint code = code_at(q);
     if (code == NONE) { frag = vec4(src, 1.0); return; }
+    // Text and dialog boxes the game draws into the world layer.
+    if (cls_of(code) == 15u) { frag = vec4(src, 1.0); return; }
     uint cls = cls_of(code);
+    g_rcls = cls;
     bool indoor = ((code >> 20) & 1u) != 0u;
     vec3 w = world_at(q);
     float jn = ign(gl_FragCoord.xy);

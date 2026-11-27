@@ -616,3 +616,105 @@ static void lit25d_add_emitters(TigLit25dFrame* frame, int num_static)
         l->flicker = 0.12f;
     }
 }
+
+// Text bubbles, floating text and dialog choices are drawn into the iso
+// window on top of the world. Pixels they change are marked in the G-buffer
+// (class 15) so the lighting pass leaves them alone.
+static uint32_t* lit25d_ui_snapshot;
+static size_t lit25d_ui_snapshot_size;
+
+static bool lit25d_iso_pixels(TigVideoBuffer** vb, TigVideoBufferData* data)
+{
+    if (tig_window_vbid_get(lit25d_window, vb) != TIG_OK) {
+        return false;
+    }
+    if (tig_video_buffer_lock(*vb) != TIG_OK) {
+        return false;
+    }
+    if (tig_video_buffer_data(*vb, data) != TIG_OK || data->pixels == NULL || data->bpp != 32) {
+        tig_video_buffer_unlock(*vb);
+        return false;
+    }
+    return true;
+}
+
+static bool lit25d_clip(const TigRect* r, int w, int h, int* x0, int* y0, int* x1, int* y1)
+{
+    *x0 = r->x < 0 ? 0 : r->x;
+    *y0 = r->y < 0 ? 0 : r->y;
+    *x1 = r->x + r->width > w ? w : r->x + r->width;
+    *y1 = r->y + r->height > h ? h : r->y + r->height;
+    return *x0 < *x1 && *y0 < *y1;
+}
+
+void lit25d_ui_begin(GameDrawInfo* draw_info)
+{
+    TigVideoBuffer* vb;
+    TigVideoBufferData data;
+
+    if (!lit25d_active() || !lit25d_iso_pixels(&vb, &data)) {
+        return;
+    }
+
+    size_t need = (size_t)data.width * (size_t)data.height;
+    if (lit25d_ui_snapshot_size < need) {
+        SDL_free(lit25d_ui_snapshot);
+        lit25d_ui_snapshot = (uint32_t*)SDL_malloc(need * sizeof(uint32_t));
+        lit25d_ui_snapshot_size = lit25d_ui_snapshot != NULL ? need : 0;
+    }
+
+    if (lit25d_ui_snapshot != NULL) {
+        int pitch = data.pitch / 4;
+        for (TigRectListNode* node = *draw_info->rects; node != NULL; node = node->next) {
+            int x0, y0, x1, y1;
+            if (!lit25d_clip(&node->rect, data.width, data.height, &x0, &y0, &x1, &y1)) {
+                continue;
+            }
+            for (int y = y0; y < y1; y++) {
+                SDL_memcpy(lit25d_ui_snapshot + (size_t)y * data.width + x0,
+                    (const uint32_t*)data.pixels + (size_t)y * pitch + x0,
+                    (size_t)(x1 - x0) * 4);
+            }
+        }
+    }
+    tig_video_buffer_unlock(vb);
+}
+
+void lit25d_ui_end(GameDrawInfo* draw_info)
+{
+    TigVideoBuffer* vb;
+    TigVideoBufferData data;
+    TigVideoBufferData gdata;
+
+    if (!lit25d_active() || lit25d_ui_snapshot == NULL || !lit25d_iso_pixels(&vb, &data)) {
+        return;
+    }
+    if (tig_video_buffer_lock(lit25d_gbuf) != TIG_OK) {
+        tig_video_buffer_unlock(vb);
+        return;
+    }
+    if (tig_video_buffer_data(lit25d_gbuf, &gdata) == TIG_OK && gdata.pixels != NULL
+        && (size_t)data.width * (size_t)data.height <= lit25d_ui_snapshot_size) {
+        int pitch = data.pitch / 4;
+        int gpitch = gdata.pitch / 4;
+        uint32_t ui_code = (uint32_t)15 << TIG_LIT25D_CLASS_SHIFT;
+        for (TigRectListNode* node = *draw_info->rects; node != NULL; node = node->next) {
+            int x0, y0, x1, y1;
+            if (!lit25d_clip(&node->rect, data.width, data.height, &x0, &y0, &x1, &y1)) {
+                continue;
+            }
+            for (int y = y0; y < y1; y++) {
+                const uint32_t* now = (const uint32_t*)data.pixels + (size_t)y * pitch;
+                const uint32_t* was = lit25d_ui_snapshot + (size_t)y * data.width;
+                uint32_t* g = (uint32_t*)gdata.pixels + (size_t)(y + LIT25D_MARGIN) * gpitch + LIT25D_MARGIN;
+                for (int x = x0; x < x1; x++) {
+                    if (now[x] != was[x]) {
+                        g[x] = ui_code;
+                    }
+                }
+            }
+        }
+    }
+    tig_video_buffer_unlock(lit25d_gbuf);
+    tig_video_buffer_unlock(vb);
+}
