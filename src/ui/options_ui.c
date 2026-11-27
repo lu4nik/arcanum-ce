@@ -10,9 +10,9 @@
 #include "game/player.h"
 #include "game/skill.h"
 #include "game/tf.h"
+#include "tig/scalefx_gl.h"
 #include "ui/cyclic_ui.h"
 #include "ui/gameuilib.h"
-#include "tig/scalefx_gl.h"
 
 #define MAX_CONTROLS 10
 
