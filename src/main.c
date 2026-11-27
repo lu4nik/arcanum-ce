@@ -305,17 +305,17 @@ int main(int argc, char** argv)
     }
 
     // Local tweak: optional xBR upscale filter (toggle in game with F9).
-    // Smooth=-1 (the default): the best filter this build has, but only where
-    // it runs on the GPU or the CPU filter is known to keep up (Apple
-    // Silicon). Elsewhere the CPU 3x filter drops the game below 10 fps, so
-    // the default there is off.
+    // Smooth=-1 (the default): the best filter this build has on macOS, where
+    // Apple Silicon keeps up with the CPU filters. Elsewhere it is off: the
+    // CPU 3x filter drops a PC below 10 fps, and ScaleFX through Direct3D 12
+    // (Options > Video) is still opt-in.
     if (highres_config->smooth >= 0) {
         tig_video_set_smooth(highres_config->smooth);
     } else {
 #if defined(__APPLE__)
         tig_video_set_smooth(tig_video_has_xbrz() ? 2 : 1);
 #else
-        tig_video_set_smooth(tig_scalefx_available() ? 3 : 0);
+        tig_video_set_smooth(0);
 #endif
     }
     tig_video_set_smooth_ui(highres_config->smooth_ui);
@@ -440,6 +440,19 @@ int main(int argc, char** argv)
 }
 
 // 0x401560
+// Local tweak: F9 steps through the upscale filters this build has.
+static void main_cycle_smooth(void)
+{
+    int mode = tig_video_get_smooth();
+
+    do {
+        mode = (mode + 1) % 4;
+    } while ((mode == 2 && !tig_video_has_xbrz())
+        || (mode == 3 && !tig_scalefx_available()));
+
+    tig_video_set_smooth(mode);
+}
+
 void main_loop(void)
 {
     int64_t location;
@@ -569,14 +582,7 @@ void main_loop(void)
                     }
                     case SDL_SCANCODE_F9:
                         // Local tweak: cycle the upscale filters this build has.
-                        {
-                            int mode = tig_video_get_smooth();
-                            do {
-                                mode = (mode + 1) % 4;
-                            } while ((mode == 2 && !tig_video_has_xbrz())
-                                || (mode == 3 && !tig_scalefx_available()));
-                            tig_video_set_smooth(mode);
-                        }
+                        main_cycle_smooth();
                         break;
                     case SDL_SCANCODE_F10:
                         intgame_toggle_interface();

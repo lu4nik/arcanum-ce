@@ -64,6 +64,7 @@ set(SRCS
     "src/video.c"
     "src/window.c"
     "src/scalefx_gl.c"
+    "src/scalefx_gpu.c"
     "src/xbr.c"
 )
 

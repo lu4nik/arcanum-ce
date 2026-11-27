@@ -241,6 +241,16 @@ jobs:
       - name: Build
         run: cmake --build --preset windows-${{ matrix.arch }}-debug
 
+      - name: Validate ScaleFX HLSL
+        if: matrix.arch == 'x64'
+        run: |
+          fxc=$(ls -d "/c/Program Files (x86)/Windows Kits/10/bin/"10.*/x64/fxc.exe | sort -V | tail -1)
+          echo "fxc: $fxc"
+          for f in first_party/tig/shaders/scalefx/gpu/*.hlsl; do
+            case "$f" in *vert*) t=vs_5_1 ;; *) t=ps_5_1 ;; esac
+            "$fxc" -nologo -T "$t" -E main -Fo "$RUNNER_TEMP/scalefx.dxbc" "$f"
+          done
+
       - name: Upload
         uses: actions/upload-artifact@v6
         with:

@@ -30,12 +30,23 @@ jobs:
       - name: Build
         run: cmake --build --preset windows-x86-release
 
+      - name: Validate ScaleFX HLSL
+        run: |
+          fxc=$(ls -d "/c/Program Files (x86)/Windows Kits/10/bin/"10.*/x64/fxc.exe | sort -V | tail -1)
+          echo "fxc: $fxc"
+          for f in first_party/tig/shaders/scalefx/gpu/*.hlsl; do
+            case "$f" in *vert*) t=vs_5_1 ;; *) t=ps_5_1 ;; esac
+            "$fxc" -nologo -T "$t" -E main -Fo "$RUNNER_TEMP/scalefx.dxbc" "$f"
+          done
+
       - name: Package
         run: |
           name="arcanum-ce-windows-x86-${GITHUB_REF_NAME}"
           mkdir -p "pkg/$name/licenses"
           cp out/build/windows-x86/Release/arcanum-ce.exe "pkg/$name/"
           cp -R dist/windows/HighRes "pkg/$name/"
+          mkdir -p "pkg/$name/HighRes/shaders"
+          cp first_party/tig/shaders/scalefx/gpu/*.hlsl "pkg/$name/HighRes/shaders/"
           cp dist/windows/README-Windows.txt "pkg/$name/"
           cp LICENSE.md "pkg/$name/licenses/arcanum-ce-LICENSE.md"
           (cd pkg && 7z a -tzip "$name.zip" "$name" > /dev/null)

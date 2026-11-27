@@ -7,6 +7,8 @@
 
 #include "tig/scalefx_gl.h"
 
+#include <SDL3/SDL.h>
+
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
 #endif
@@ -224,7 +226,7 @@ static bool make_targets(int w, int h)
     return true;
 }
 
-bool tig_scalefx_init(const char* shader_dir)
+static bool sfx_gl_init(const char* shader_dir)
 {
     if (sfx_ready) {
         return true;
@@ -295,7 +297,7 @@ bool tig_scalefx_init(const char* shader_dir)
     return true;
 }
 
-bool tig_scalefx_run(const uint32_t* src, int src_pitch_px, int w, int h, uint32_t* dst, int dst_pitch_px)
+static bool sfx_gl_run(const uint32_t* src, int src_pitch_px, int w, int h, uint32_t* dst, int dst_pitch_px)
 {
     if (!sfx_ready) {
         return false;
@@ -416,7 +418,7 @@ bool tig_scalefx_run(const uint32_t* src, int src_pitch_px, int w, int h, uint32
     return ok;
 }
 
-void tig_scalefx_exit(void)
+static void sfx_gl_exit(void)
 {
     if (!sfx_ready && sfx_context == NULL) {
         return;
@@ -444,37 +446,85 @@ void tig_scalefx_exit(void)
     sfx_ready = false;
 }
 
-bool tig_scalefx_available(void)
-{
-    return true;
-}
+#endif
 
+// Backend choice: macOS keeps the OpenGL path (set ARCANUM_SCALEFX_GPU=1 to
+// try SDL GPU / Metal instead); everything else goes through SDL GPU
+// (Direct3D 12 on Windows).
+static bool sfx_use_gpu(void)
+{
+#if defined(__APPLE__) && TARGET_OS_OSX
+    static int use = -1;
+    if (use < 0) {
+        use = SDL_getenv("ARCANUM_SCALEFX_GPU") != NULL;
+    }
+    return use != 0;
 #else
+    return true;
+#endif
+}
 
 bool tig_scalefx_init(const char* shader_dir)
 {
-    (void)shader_dir;
-    return false;
+#if defined(__APPLE__) && TARGET_OS_OSX
+    if (!sfx_use_gpu()) {
+        return sfx_gl_init(shader_dir);
+    }
+#endif
+    return tig_scalefx_gpu_init(shader_dir);
+}
+
+static bool sfx_run(const uint32_t* src, int src_pitch_px, int w, int h, uint32_t* dst, int dst_pitch_px)
+{
+#if defined(__APPLE__) && TARGET_OS_OSX
+    if (!sfx_use_gpu()) {
+        return sfx_gl_run(src, src_pitch_px, w, h, dst, dst_pitch_px);
+    }
+#endif
+    return tig_scalefx_gpu_run(src, src_pitch_px, w, h, dst, dst_pitch_px);
 }
 
 bool tig_scalefx_run(const uint32_t* src, int src_pitch_px, int w, int h, uint32_t* dst, int dst_pitch_px)
 {
-    (void)src;
-    (void)src_pitch_px;
-    (void)w;
-    (void)h;
-    (void)dst;
-    (void)dst_pitch_px;
-    return false;
+    bool ok = sfx_run(src, src_pitch_px, w, h, dst, dst_pitch_px);
+
+    // Debug: ARCANUM_SCALEFX_DUMP=<prefix> saves frame N (ARCANUM_SCALEFX_DUMP_FRAME,
+    // default 60) as <prefix>-src.bmp and <prefix>-out.bmp.
+    static int frame;
+    const char* dump = SDL_getenv("ARCANUM_SCALEFX_DUMP");
+    if (ok && dump != NULL) {
+        const char* nth = SDL_getenv("ARCANUM_SCALEFX_DUMP_FRAME");
+        if (++frame == (nth != NULL ? SDL_atoi(nth) : 60)) {
+            char path[512];
+            SDL_Surface* s = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_XRGB8888, (void*)src, src_pitch_px * 4);
+            SDL_Surface* d = SDL_CreateSurfaceFrom(w * 3, h * 3, SDL_PIXELFORMAT_XRGB8888, dst, dst_pitch_px * 4);
+            SDL_snprintf(path, sizeof(path), "%s-src.bmp", dump);
+            SDL_SaveBMP(s, path);
+            SDL_snprintf(path, sizeof(path), "%s-out.bmp", dump);
+            SDL_SaveBMP(d, path);
+            SDL_DestroySurface(s);
+            SDL_DestroySurface(d);
+            SDL_Log("ScaleFX: dumped frame %d to %s-*.bmp", frame, dump);
+        }
+    }
+    return ok;
 }
 
 void tig_scalefx_exit(void)
 {
+#if defined(__APPLE__) && TARGET_OS_OSX
+    sfx_gl_exit();
+#endif
+    tig_scalefx_gpu_exit();
 }
 
 bool tig_scalefx_available(void)
 {
-    return false;
-}
-
+#if defined(__APPLE__) && TARGET_OS_OSX
+    if (!sfx_use_gpu()) {
+        return true;
+    }
 #endif
+    // Only offer it where the device and the shaders actually load.
+    return tig_scalefx_init("HighRes/shaders");
+}
