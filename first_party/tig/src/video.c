@@ -550,6 +550,18 @@ static SDL_Texture* tig_video_smooth_frame(void)
         tig_lit25d_hd_apply(dst, dst_pitch, w * 3, h * 3, 3, keep, num_keep);
     }
 
+    // Local test aid: a scripted "shot" also saves this upscaled frame at full
+    // size next to the presented one (<path>.3x.bmp).
+    if (tig_video_capture_path[0] != '\0') {
+        SDL_Surface* full = SDL_CreateSurfaceFrom(w * 3, h * 3, SDL_PIXELFORMAT_XRGB8888, dst, dst_pitch * 4);
+        if (full != NULL) {
+            char path[300];
+            SDL_snprintf(path, sizeof(path), "%s.3x.bmp", tig_video_capture_path);
+            SDL_SaveBMP(full, path);
+            SDL_DestroySurface(full);
+        }
+    }
+
     // Keep the interface and its text crisp: plain 3x pixels over UI windows,
     // only the game world underneath gets smoothed.
     TigRect rects[64];

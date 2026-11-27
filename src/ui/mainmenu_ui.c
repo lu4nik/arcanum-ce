@@ -1741,6 +1741,27 @@ bool mainmenu_ui_handle(void)
     broadcast_ui_close();
 
     while (mainmenu_ui_active) {
+        // Local test hook: ARCANUM_AUTOLOAD_SLOT=<save name without .gsi>
+        // loads that save straight from the main menu (scripted tests).
+        static bool autoload_done;
+        const char* autoload = SDL_getenv("ARCANUM_AUTOLOAD_SLOT");
+        if (!autoload_done && autoload != NULL) {
+            autoload_done = true;
+            if (gamelib_saveinfo_load(autoload, &mainmenu_ui_gsi)) {
+                char name[9];
+                mainmenu_ui_gsi_loaded = true;
+                strncpy(name, autoload, 8);
+                name[8] = '\0';
+                sub_5432B0(name);
+                if (mainmenu_ui_gsi_loaded) {
+                    gamelib_saveinfo_exit(&mainmenu_ui_gsi);
+                    mainmenu_ui_gsi_loaded = false;
+                }
+                continue;
+            }
+            tig_debug_printf("Autoload: cannot read save %s\n", autoload);
+        }
+
         tig_ping();
         tig_timer_now(&timestamp);
         timeevent_ping(timestamp);
