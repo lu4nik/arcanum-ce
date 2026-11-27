@@ -480,15 +480,18 @@ bool script_local_flag_get(int64_t obj, int index, int flag)
 }
 
 // 0x444F60
-void script_local_flag_set(int64_t obj, int index, int flag, bool enabled)
+// NOTE: the original ORs `enabled << flag`, not `1 << flag`, so a dialog
+// "lf" action with a value above 1 sets other bits. The game's own dialogs
+// only use 0 and 1.
+void script_local_flag_set(int64_t obj, int index, int flag, int enabled)
 {
     Script scr;
 
     obj_arrayfield_script_get(obj, OBJ_F_SCRIPTS_IDX, index, &scr);
 
     if (scr.num != 0) {
-        if (enabled) {
-            scr.hdr.flags |= 1 << flag;
+        if (enabled != 0) {
+            scr.hdr.flags |= (unsigned int)enabled << flag;
         } else {
             scr.hdr.flags &= ~(1 << flag);
         }
