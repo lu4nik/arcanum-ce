@@ -4080,7 +4080,11 @@ bool object_locked_get(int64_t obj)
 }
 
 // 0x441DD0
-bool object_locked_set(int64_t obj, bool locked)
+// NOTE: `locked` is a tri-state in the original (0x441DD0): 1 locks, 0
+// unlocks and relocks the object an hour later, anything else (scripts use 2,
+// e.g. the guard at Bates' door) unlocks for good. CE took it as a bool, so a
+// script "unlock" with 2 locked the door instead.
+bool object_locked_set(int64_t obj, int locked)
 {
     int type;
     unsigned int flags;
@@ -4093,14 +4097,14 @@ bool object_locked_set(int64_t obj, bool locked)
 
     type = obj_field_int32_get(obj, OBJ_F_TYPE);
     flags = obj_field_int32_get(obj, type == OBJ_TYPE_PORTAL ? OBJ_F_PORTAL_FLAGS : OBJ_F_CONTAINER_FLAGS);
-    if ((flags & (type == OBJ_TYPE_PORTAL ? OPF_LOCKED : OCOF_LOCKED)) != 0 && !locked) {
+    if ((flags & (type == OBJ_TYPE_PORTAL ? OPF_LOCKED : OCOF_LOCKED)) != 0 && locked == 0) {
         timeevent.type = TIMEEVENT_TYPE_LOCK;
         timeevent.params[0].object_value = obj;
         sub_45A950(&datetime, 3600000);
         timeevent_add_delay(&timeevent, &datetime);
     }
 
-    if (locked) {
+    if (locked == 1) {
         flags |= (type == OBJ_TYPE_PORTAL ? OPF_LOCKED : OCOF_LOCKED);
     } else {
         flags &= ~(type == OBJ_TYPE_PORTAL ? OPF_LOCKED : OCOF_LOCKED);
