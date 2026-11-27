@@ -44,6 +44,7 @@
 #include "game/tech.h"
 #include "game/wallcheck.h"
 #include "tig/gamepad.h"
+#include "tig/scalefx_gl.h"
 #include "ui/charedit_ui.h"
 #include "ui/dialog_ui.h"
 #include "ui/gameuilib.h"
@@ -304,10 +305,19 @@ int main(int argc, char** argv)
     }
 
     // Local tweak: optional xBR upscale filter (toggle in game with F9).
-    // Smooth=-1 (the default): the best filter this build has.
-    tig_video_set_smooth(highres_config->smooth >= 0
-            ? highres_config->smooth
-            : (tig_video_has_xbrz() ? 2 : 1));
+    // Smooth=-1 (the default): the best filter this build has, but only where
+    // it runs on the GPU or the CPU filter is known to keep up (Apple
+    // Silicon). Elsewhere the CPU 3x filter drops the game below 10 fps, so
+    // the default there is off.
+    if (highres_config->smooth >= 0) {
+        tig_video_set_smooth(highres_config->smooth);
+    } else {
+#if defined(__APPLE__)
+        tig_video_set_smooth(tig_video_has_xbrz() ? 2 : 1);
+#else
+        tig_video_set_smooth(tig_scalefx_available() ? 3 : 0);
+#endif
+    }
     tig_video_set_smooth_ui(highres_config->smooth_ui);
 
     screenshotter.key = SDL_SCANCODE_F12;
@@ -558,8 +568,15 @@ void main_loop(void)
                         break;
                     }
                     case SDL_SCANCODE_F9:
-                        // Local tweak: toggle the xBR upscale filter.
-                        tig_video_set_smooth((tig_video_get_smooth() + 1) % 4);
+                        // Local tweak: cycle the upscale filters this build has.
+                        {
+                            int mode = tig_video_get_smooth();
+                            do {
+                                mode = (mode + 1) % 4;
+                            } while ((mode == 2 && !tig_video_has_xbrz())
+                                || (mode == 3 && !tig_scalefx_available()));
+                            tig_video_set_smooth(mode);
+                        }
                         break;
                     case SDL_SCANCODE_F10:
                         intgame_toggle_interface();

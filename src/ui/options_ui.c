@@ -12,6 +12,7 @@
 #include "game/tf.h"
 #include "ui/cyclic_ui.h"
 #include "ui/gameuilib.h"
+#include "tig/scalefx_gl.h"
 
 #define MAX_CONTROLS 10
 
@@ -871,8 +872,10 @@ static void options_ui_video_arrays_build(void)
         snprintf(options_ui_smooth_text[options_ui_smooth_count], sizeof(options_ui_smooth_text[0]), "xBRZ");
         options_ui_smooth_mode[options_ui_smooth_count++] = 2;
     }
-    snprintf(options_ui_smooth_text[options_ui_smooth_count], sizeof(options_ui_smooth_text[0]), "ScaleFX");
-    options_ui_smooth_mode[options_ui_smooth_count++] = 3;
+    if (tig_scalefx_available()) {
+        snprintf(options_ui_smooth_text[options_ui_smooth_count], sizeof(options_ui_smooth_text[0]), "ScaleFX");
+        options_ui_smooth_mode[options_ui_smooth_count++] = 3;
+    }
 
     for (index = 0; index < options_ui_smooth_count; index++) {
         options_ui_smooth_labels[index] = options_ui_smooth_text[index];

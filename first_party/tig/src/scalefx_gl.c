@@ -444,6 +444,11 @@ void tig_scalefx_exit(void)
     sfx_ready = false;
 }
 
+bool tig_scalefx_available(void)
+{
+    return true;
+}
+
 #else
 
 bool tig_scalefx_init(const char* shader_dir)
@@ -465,6 +470,11 @@ bool tig_scalefx_run(const uint32_t* src, int src_pitch_px, int w, int h, uint32
 
 void tig_scalefx_exit(void)
 {
+}
+
+bool tig_scalefx_available(void)
+{
+    return false;
 }
 
 #endif

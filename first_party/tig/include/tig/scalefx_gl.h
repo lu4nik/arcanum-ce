@@ -13,6 +13,8 @@ extern "C" {
 bool tig_scalefx_init(const char* shader_dir);
 bool tig_scalefx_run(const uint32_t* src, int src_pitch_px, int w, int h, uint32_t* dst, int dst_pitch_px);
 void tig_scalefx_exit(void);
+// True when this build has the GPU ScaleFX path at all (macOS for now).
+bool tig_scalefx_available(void);
 
 #ifdef __cplusplus
 }
