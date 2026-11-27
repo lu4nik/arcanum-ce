@@ -28,6 +28,18 @@ static bool lit25d_in_margin_pass;
 
 static bool lit25d_provide(TigLit25dFrame* frame);
 
+// Glowing overlays seen recently: each is drawn piecewise (one piece per
+// dirty rect), so pieces of the same effect are merged into one box.
+#define LIT25D_MAX_EMITTERS 24
+#define LIT25D_EMITTER_TTL 220
+typedef struct LitEmitter {
+    tig_art_id_t art_id;
+    TigRect box; // window coords
+    Uint64 seen;
+} LitEmitter;
+static LitEmitter lit25d_emitters[LIT25D_MAX_EMITTERS];
+static void lit25d_add_emitters(TigLit25dFrame* frame, int num_static);
+
 static void lit25d_destroy_buffer(void)
 {
     if (lit25d_gbuf != NULL) {
@@ -85,6 +97,7 @@ bool lit25d_init(tig_window_handle_t iso_window_handle)
 void lit25d_exit(void)
 {
     tig_lit25d_set_provider(NULL);
+    tig_lit25d_exit();
     lit25d_destroy_buffer();
     lit25d_window = TIG_WINDOW_HANDLE_INVALID;
 }
@@ -293,6 +306,18 @@ static bool lit25d_provide(TigLit25dFrame* frame)
         // Fade out towards sunrise and sunset.
         float edge = phase < 0.08f ? phase / 0.08f : (phase > 0.92f ? (1.0f - phase) / 0.08f : 1.0f);
         frame->sun *= edge;
+
+        // Colour of the hour, outdoors only: golden near sunrise and
+        // sunset, cool moonlight at night, neutral at midday.
+        float night = 1.0f - (frame->ambient - 0.35f) / 0.45f;
+        night = night < 0.0f ? 0.0f : (night > 1.0f ? 1.0f : night);
+        float golden = 1.0f - (phase < 0.5f ? phase : 1.0f - phase) / 0.2f;
+        golden = golden < 0.0f ? 0.0f : (golden > 1.0f ? 1.0f : golden);
+        golden *= 1.0f - night;
+        frame->night = night;
+        frame->grade[0] = (1.0f + 0.10f * golden) * (1.0f - 0.16f * night);
+        frame->grade[1] = (1.0f - 0.01f * golden) * (1.0f - 0.08f * night);
+        frame->grade[2] = (1.0f - 0.15f * golden) * (1.0f + 0.08f * night);
     }
 
     // Diagnostics every ~3 seconds with ARCANUM_LIT25D_LOG=1: clock, sun, how
@@ -392,6 +417,8 @@ static bool lit25d_provide(TigLit25dFrame* frame)
             l->r = (float)r / 255.0f;
             l->g = (float)g / 255.0f;
             l->b = (float)b / 255.0f;
+            // Warm lights are flames (torches, candles, gas): they breathe.
+            l->flicker = r > b + 40 ? 0.09f : 0.02f;
 
             // Near-white lamps read as LEDs; nudge them towards gaslight.
             {
@@ -407,6 +434,8 @@ static bool lit25d_provide(TigLit25dFrame* frame)
         sector_unlock(node->sec);
     }
     sector_list_destroy(sectors);
+
+    lit25d_add_emitters(frame, frame->num_lights);
 
     return true;
 }
@@ -466,5 +495,123 @@ void lit25d_draw_margin(GameDrawInfo* draw_info)
         TigRectListNode* next = head->next;
         tig_rect_node_destroy(head);
         head = next;
+    }
+}
+
+void lit25d_emit(const TigArtBlitInfo* blit_info)
+{
+    Uint64 now;
+    tig_art_id_t art_id;
+    const TigRect* r;
+    int slot = -1;
+    int oldest = 0;
+
+    if (!lit25d_active() || lit25d_in_margin_pass) {
+        return;
+    }
+
+    now = SDL_GetTicks();
+    art_id = tig_art_id_frame_set(blit_info->art_id, 0);
+    r = blit_info->dst_rect;
+
+    for (int i = 0; i < LIT25D_MAX_EMITTERS; i++) {
+        LitEmitter* e = &lit25d_emitters[i];
+        if (e->seen != 0 && e->art_id == art_id
+            && r->x < e->box.x + e->box.width + 48 && e->box.x < r->x + r->width + 48
+            && r->y < e->box.y + e->box.height + 48 && e->box.y < r->y + r->height + 48) {
+            slot = i;
+            break;
+        }
+        if (lit25d_emitters[i].seen < lit25d_emitters[oldest].seen) {
+            oldest = i;
+        }
+    }
+
+    if (slot < 0) {
+        slot = oldest;
+        lit25d_emitters[slot].art_id = art_id;
+        lit25d_emitters[slot].box = *r;
+    } else {
+        LitEmitter* e = &lit25d_emitters[slot];
+        // A new animation frame starts a new box; pieces of the same frame
+        // grow it.
+        if (now - e->seen > 40) {
+            e->box = *r;
+        } else {
+            int x0 = r->x < e->box.x ? r->x : e->box.x;
+            int y0 = r->y < e->box.y ? r->y : e->box.y;
+            int x1 = r->x + r->width > e->box.x + e->box.width ? r->x + r->width : e->box.x + e->box.width;
+            int y1 = r->y + r->height > e->box.y + e->box.height ? r->y + r->height : e->box.y + e->box.height;
+            e->box.x = x0;
+            e->box.y = y0;
+            e->box.width = x1 - x0;
+            e->box.height = y1 - y0;
+        }
+    }
+    lit25d_emitters[slot].seen = now;
+}
+
+// Turns live emitters into lights (called from the provider).
+static void lit25d_add_emitters(TigLit25dFrame* frame, int num_static)
+{
+    Uint64 now = SDL_GetTicks();
+
+    for (int i = 0; i < LIT25D_MAX_EMITTERS && frame->num_lights < TIG_LIT25D_MAX_LIGHTS; i++) {
+        LitEmitter* e = &lit25d_emitters[i];
+        TigArtFrameData fd;
+        unsigned int color;
+        int r = 255;
+        int g = 150;
+        int b = 70;
+
+        if (e->seen == 0 || now - e->seen > LIT25D_EMITTER_TTL || e->box.width < 4 || e->box.height < 4) {
+            continue;
+        }
+
+        float cx = (float)(e->box.x + e->box.width / 2 + LIT25D_MARGIN);
+        float h = (float)e->box.height;
+        float z = h * 0.4f;
+        z = z < 10.0f ? 10.0f : (z > 80.0f ? 80.0f : z);
+        float gy = (float)(e->box.y + LIT25D_MARGIN) + h * 0.5f + z;
+
+        // Glows already attached to a lamp are covered by its light.
+        bool near_lamp = false;
+        for (int k = 0; k < num_static; k++) {
+            float dx = frame->lights[k].x - cx;
+            float dy = frame->lights[k].y - gy;
+            if (dx * dx + dy * dy < 50.0f * 50.0f) {
+                near_lamp = true;
+                break;
+            }
+        }
+        if (near_lamp) {
+            continue;
+        }
+
+        // Colour of the effect: its centre pixel, unless that is too dark.
+        if (tig_art_frame_data(e->art_id, &fd) == TIG_OK
+            && sub_502E50(e->art_id, fd.width / 2, fd.height / 2, &color) == TIG_OK) {
+            int cr = tig_color_get_red(color);
+            int cg = tig_color_get_green(color);
+            int cb = tig_color_get_blue(color);
+            int mx = cr > cg ? (cr > cb ? cr : cb) : (cg > cb ? cg : cb);
+            if (mx > 60) {
+                r = cr * 255 / mx;
+                g = cg * 255 / mx;
+                b = cb * 255 / mx;
+            }
+        }
+
+        TigLit25dLight* l = &frame->lights[frame->num_lights++];
+        float size = (float)(e->box.width > e->box.height ? e->box.width : e->box.height);
+        l->x = cx;
+        l->y = gy;
+        l->z = z;
+        l->radius = size * 1.3f;
+        l->radius = l->radius < 70.0f ? 70.0f : (l->radius > 260.0f ? 260.0f : l->radius);
+        l->r = (float)r / 255.0f * 0.9f;
+        l->g = (float)g / 255.0f * 0.9f;
+        l->b = (float)b / 255.0f * 0.9f;
+        l->flicker = 0.12f;
     }
 }

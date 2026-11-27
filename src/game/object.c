@@ -57,6 +57,7 @@ typedef struct ObjectBlitInfo {
     /* 0030 */ int rect_index;
     int lit_anchor_y;
     int lit_cls;
+    bool lit_emit;
 } ObjectBlitInfo;
 
 typedef struct ObjectBlitRectInfo {
@@ -142,6 +143,7 @@ static ObjectBlitInfo* object_pending_blits;
 // Local experiment (lit25d): anchor and class of the sprite being queued.
 static int object_lit_anchor_y;
 static int object_lit_cls;
+static bool object_lit_emit;
 
 // 0x5E2E78
 static tig_color_t object_reaction_colors[REACTION_COUNT];
@@ -706,7 +708,11 @@ void object_draw(GameDrawInfo* draw_info)
                                                                             order = overlay_order++;
                                                                         }
 
+                                                                        // Local experiment (lit25d): glowing overlays (spell
+                                                                        // effects, fire) light their surroundings.
+                                                                        object_lit_emit = (art_blit_info.flags & TIG_ART_BLT_BLEND_ADD) != 0;
                                                                         object_enqueue_blit(&art_blit_info, order);
+                                                                        object_lit_emit = false;
                                                                     }
                                                                     rect_node = rect_node->next;
                                                                 }
@@ -4823,6 +4829,7 @@ void object_enqueue_blit(TigArtBlitInfo* blit_info, int order)
     object_pending_blits[object_blit_queue_size].rect_index = object_blit_queue_size;
     object_pending_blits[object_blit_queue_size].lit_anchor_y = object_lit_anchor_y;
     object_pending_blits[object_blit_queue_size].lit_cls = object_lit_cls;
+    object_pending_blits[object_blit_queue_size].lit_emit = object_lit_emit;
 
     object_pending_rects[object_blit_queue_size].src_rect = *blit_info->src_rect;
     object_pending_rects[object_blit_queue_size].dst_rect = *blit_info->dst_rect;
@@ -4847,6 +4854,9 @@ void object_flush_pending_blits(void)
         // Local experiment (lit25d): the off-screen margin pass only feeds the G-buffer.
         if (!lit25d_margin_pass()) {
             tig_window_blit_art(object_iso_window_handle, &(object_pending_blits[index].blit_info));
+        }
+        if (object_pending_blits[index].lit_emit) {
+            lit25d_emit(&(object_pending_blits[index].blit_info));
         }
         if (object_pending_blits[index].lit_cls != 0) {
             lit25d_blit(&(object_pending_blits[index].blit_info),

@@ -34,6 +34,7 @@ typedef struct TigLit25dLight {
     float r; // 0..1
     float g;
     float b;
+    float flicker; // 0 = steady, ~0.1 = flame
 } TigLit25dLight;
 
 typedef struct TigLit25dFrame {
@@ -48,6 +49,8 @@ typedef struct TigLit25dFrame {
     float sun; // 0..1 strength of sun shadows
     float sun_dir[3]; // towards the sun, world space (x right, y towards camera, z up)
     float sun_reach; // how far shadows are traced, world units
+    float grade[3]; // outdoor colour grade for the time of day
+    float night; // 0 day .. 1 night
     int num_lights;
     TigLit25dLight lights[TIG_LIT25D_MAX_LIGHTS];
 } TigLit25dFrame;
@@ -62,6 +65,9 @@ void tig_lit25d_set_provider(TigLit25dProvider provider);
 // Lights `src` into `dst` (same size, XRGB8888). Returns false when the pass is
 // unavailable; `dst` is then untouched.
 bool tig_lit25d_apply(const uint32_t* src, int src_pitch_px, int w, int h, uint32_t* dst, int dst_pitch_px);
+
+// Releases the GPU device and its resources.
+void tig_lit25d_exit(void);
 
 #ifdef __cplusplus
 }
