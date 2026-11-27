@@ -1,3 +1,4 @@
+#include "game/lit25d.h"
 #include "game/scroll.h"
 
 #include "game/gamelib.h"
@@ -467,6 +468,7 @@ void scroll_by(int64_t dx, int64_t dy)
 
     // Scroll the window content.
     tig_window_scroll(scroll_init_info.iso_window_handle, (int)dx, (int)dy);
+    lit25d_scroll((int)dx, (int)dy);
 
     // Invalidate newly revealed areas (horizontal scroll).
     if (dx > 0) {

@@ -1,3 +1,6 @@
+#include <tig/lit25d.h>
+
+#include "game/lit25d.h"
 #include "game/object.h"
 
 #include <inttypes.h>
@@ -52,6 +55,8 @@ typedef struct ObjectBlitInfo {
     /* 0000 */ TigArtBlitInfo blit_info;
     /* 002C */ int order;
     /* 0030 */ int rect_index;
+    int lit_anchor_y;
+    int lit_cls;
 } ObjectBlitInfo;
 
 typedef struct ObjectBlitRectInfo {
@@ -133,6 +138,10 @@ static TigRectListNode* object_dirty_rects_head;
 
 // 0x5E2E74
 static ObjectBlitInfo* object_pending_blits;
+
+// Local experiment (lit25d): anchor and class of the sprite being queued.
+static int object_lit_anchor_y;
+static int object_lit_cls;
 
 // 0x5E2E78
 static tig_color_t object_reaction_colors[REACTION_COUNT];
@@ -916,7 +925,19 @@ void object_draw(GameDrawInfo* draw_info)
                                                                     src_rect.height *= 2;
                                                                 }
 
+                                                                if ((obj_flags & OF_FLAT) == 0) {
+                                                                    object_lit_anchor_y = (int)loc_y;
+                                                                    object_lit_cls = obj_type == OBJ_TYPE_WALL
+                                                                        ? TIG_LIT25D_CLASS_WALL
+                                                                        : (obj_type == OBJ_TYPE_PC || obj_type == OBJ_TYPE_NPC)
+                                                                        ? TIG_LIT25D_CLASS_CRITTER
+                                                                        : TIG_LIT25D_CLASS_OBJECT;
+                                                                    if (tig_art_tile_id_type_get(tile_art_id_at(loc)) == 0) {
+                                                                        object_lit_cls |= TIG_LIT25D_INDOOR;
+                                                                    }
+                                                                }
                                                                 object_enqueue_blit(&art_blit_info, order);
+                                                                object_lit_cls = 0;
 
                                                                 // CE: Highlight in a second pass if needed. Unlike the hovered obj, which
                                                                 // is rendered at `INT_MAX`, the highlighted object is rendered just one
@@ -4800,6 +4821,8 @@ void object_enqueue_blit(TigArtBlitInfo* blit_info, int order)
     object_pending_blits[object_blit_queue_size].order = order;
     object_pending_blits[object_blit_queue_size].blit_info = *blit_info;
     object_pending_blits[object_blit_queue_size].rect_index = object_blit_queue_size;
+    object_pending_blits[object_blit_queue_size].lit_anchor_y = object_lit_anchor_y;
+    object_pending_blits[object_blit_queue_size].lit_cls = object_lit_cls;
 
     object_pending_rects[object_blit_queue_size].src_rect = *blit_info->src_rect;
     object_pending_rects[object_blit_queue_size].dst_rect = *blit_info->dst_rect;
@@ -4821,7 +4844,15 @@ void object_flush_pending_blits(void)
     for (index = 0; index < object_blit_queue_size; index++) {
         object_pending_blits[index].blit_info.src_rect = &(object_pending_rects[object_pending_blits[index].rect_index].src_rect);
         object_pending_blits[index].blit_info.dst_rect = &(object_pending_rects[object_pending_blits[index].rect_index].dst_rect);
-        tig_window_blit_art(object_iso_window_handle, &(object_pending_blits[index].blit_info));
+        // Local experiment (lit25d): the off-screen margin pass only feeds the G-buffer.
+        if (!lit25d_margin_pass()) {
+            tig_window_blit_art(object_iso_window_handle, &(object_pending_blits[index].blit_info));
+        }
+        if (object_pending_blits[index].lit_cls != 0) {
+            lit25d_blit(&(object_pending_blits[index].blit_info),
+                object_pending_blits[index].lit_anchor_y,
+                object_pending_blits[index].lit_cls);
+        }
     }
 
     object_blit_queue_size = 0;

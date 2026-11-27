@@ -11,6 +11,7 @@
 
 #include <tig/tig.h>
 
+#include "game/lit25d.h"
 #include "game/ai.h"
 #include "game/anim.h"
 #include "game/combat.h"
@@ -590,6 +591,11 @@ void main_loop(void)
                         break;
                     }
                     case SDL_SCANCODE_F9:
+                        if (tig_kb_get_modifier(SDL_KMOD_SHIFT)) {
+                            // Local experiment: toggle 2.5D lighting.
+                            lit25d_cycle_mode();
+                            break;
+                        }
                         // Local tweak: cycle the upscale filters this build has.
                         main_cycle_smooth();
                         break;

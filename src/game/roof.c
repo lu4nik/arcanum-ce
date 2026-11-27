@@ -1,3 +1,6 @@
+#include <tig/lit25d.h>
+
+#include "game/lit25d.h"
 #include "game/roof.h"
 
 #include "game/gamelib.h"
@@ -363,7 +366,12 @@ void roof_draw(GameDrawInfo* draw_info)
 
                             art_blit_info.flags |= TIG_ART_BLT_SCRATCH_VALID;
                             art_blit_info.scratch_video_buffer = gamelib_scratch_video_buffer;
-                            tig_window_blit_art(roof_iso_window_handle, &art_blit_info);
+                            if (!lit25d_margin_pass()) {
+                                tig_window_blit_art(roof_iso_window_handle, &art_blit_info);
+                            }
+                            if ((art_blit_info.flags & TIG_ART_BLT_BLEND_ALPHA_ANY) == 0) {
+                                lit25d_blit(&art_blit_info, 0, TIG_LIT25D_CLASS_ROOF);
+                            }
                         }
                         node = node->next;
                     }

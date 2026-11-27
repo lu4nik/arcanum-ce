@@ -1,3 +1,4 @@
+#include "game/lit25d.h"
 #include "game/gamelib.h"
 
 #include <stdio.h>
@@ -350,6 +351,7 @@ bool gamelib_init(GameInitInfo* init_info)
 
     gamelib_window_rect_x = window_data.rect.x;
     gamelib_window_rect_y = window_data.rect.y;
+    lit25d_init(init_info->iso_window_handle);
     gamelib_thumbnail_width = window_data.rect.width / 4;
     gamelib_thumbnail_height = window_data.rect.height / 4;
 
@@ -461,6 +463,7 @@ void gamelib_reset(void)
 void gamelib_exit(void)
 {
     settings_save(&settings);
+    lit25d_exit();
 
     for (int index = MODULE_COUNT - 1; index >= 0; index--) {
         if (gamelib_modules[index].exit_func != NULL) {
@@ -520,6 +523,7 @@ void gamelib_resize(GameResizeInfo* resize_info)
 
     gamelib_window_rect_x = resize_info->window_rect.x;
     gamelib_window_rect_y = resize_info->window_rect.y;
+    lit25d_resize(resize_info->window_handle);
 
     gamelib_iso_content_rect_ex.x = gamelib_iso_content_rect.x - 256;
     gamelib_iso_content_rect_ex.y = gamelib_iso_content_rect.y - 256;
@@ -886,7 +890,15 @@ bool gamelib_draw(void)
         draw_info.sector_rect = &sector_rect;
         draw_info.sectors = sectors;
         draw_info.rects = &gamelib_dirty_rects_head;
+        if (lit25d_active()) {
+            for (TigRectListNode* dirty = gamelib_dirty_rects_head; dirty != NULL; dirty = dirty->next) {
+                lit25d_clear(&(dirty->rect));
+            }
+        }
         gamelib_draw_func(&draw_info);
+        if (lit25d_active()) {
+            lit25d_draw_margin(&draw_info);
+        }
         sector_list_destroy(sectors);
 
         node = gamelib_dirty_rects_head;

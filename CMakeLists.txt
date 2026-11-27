@@ -107,6 +107,7 @@ set(SRCS
     "src/game/light_scheme.c"
     "src/game/light_scheme.h"
     "src/game/light.c"
+    "src/game/lit25d.c"
     "src/game/light.h"
     "src/game/location.c"
     "src/game/location.h"

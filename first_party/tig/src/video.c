@@ -12,6 +12,7 @@
 #include "tig/memory.h"
 #include "tig/window.h"
 #include "tig/scalefx_gl.h"
+#include "tig/lit25d.h"
 #include "tig/xbr.h"
 #include "tig/message.h"
 #include "tig/mouse.h"
@@ -675,6 +676,33 @@ int tig_video_flip(void)
     }
     Uint64 flip_start = flip_bench ? SDL_GetTicksNS() : 0;
 
+    // Local experiment: 2.5D lighting pass. Lights a copy of the frame and
+    // presents that instead, so the game's own (dirty-rect) frame stays intact.
+    SDL_Surface* unlit_surface = tig_video_state.surface;
+    if (tig_lit25d_mode() != 0 && SDL_BYTESPERPIXEL(unlit_surface->format) == 4) {
+        static SDL_Surface* lit_surface;
+        if (lit_surface != NULL && (lit_surface->w != unlit_surface->w || lit_surface->h != unlit_surface->h)) {
+            SDL_DestroySurface(lit_surface);
+            lit_surface = NULL;
+        }
+        if (lit_surface == NULL) {
+            lit_surface = SDL_CreateSurface(unlit_surface->w, unlit_surface->h, unlit_surface->format);
+        }
+        if (lit_surface != NULL
+            && tig_lit25d_apply((const uint32_t*)unlit_surface->pixels, unlit_surface->pitch / 4,
+                unlit_surface->w, unlit_surface->h,
+                (uint32_t*)lit_surface->pixels, lit_surface->pitch / 4)) {
+            // Interface windows over the world stay as they were.
+            TigRect rects[64];
+            int num_rects = tig_window_overlay_rects(unlit_surface->w, unlit_surface->h, rects, 64);
+            for (int r = 0; r < num_rects; r++) {
+                SDL_Rect rr = { rects[r].x, rects[r].y, rects[r].width, rects[r].height };
+                SDL_BlitSurface(unlit_surface, &rr, lit_surface, &rr);
+            }
+            tig_video_state.surface = lit_surface;
+        }
+    }
+
     SDL_Texture* smooth = NULL;
     bool direct = false;
     if (tig_video_smooth && SDL_BYTESPERPIXEL(tig_video_state.surface->format) == 4) {
@@ -697,6 +725,7 @@ int tig_video_flip(void)
     if (smooth == NULL || num_crisp > 0) {
         SDL_UpdateTexture(tig_video_state.texture, NULL, tig_video_state.surface->pixels, tig_video_state.surface->pitch);
     }
+    tig_video_state.surface = unlit_surface;
 
     // Local tweak: letterbox bars must stay black (the filter label leaves the
     // draw colour white).

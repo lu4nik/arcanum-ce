@@ -1,3 +1,6 @@
+#include <tig/lit25d.h>
+
+#include "game/lit25d.h"
 #include "game/tile.h"
 
 #define _USE_MATH_DEFINES
@@ -729,6 +732,23 @@ void tile_draw_iso(GameDrawInfo* draw_info)
                                             }
                                         } else {
                                             art_blit_info.flags = 0;
+                                        }
+                                    }
+
+                                    // Local experiment (lit25d): mark indoor floor so the sun skips it.
+                                    if (tile_type == 0 && lit25d_active()) {
+                                        TigArtBlitInfo lit_info = art_blit_info;
+                                        TigRect lit_dst;
+                                        TigRect lit_src;
+                                        if (tig_rect_intersection(&tile_rect, &(rect_node->rect), &lit_dst) == TIG_OK) {
+                                            lit_src.x = lit_dst.x - tile_rect.x;
+                                            lit_src.y = lit_dst.y - tile_rect.y;
+                                            lit_src.width = lit_dst.width;
+                                            lit_src.height = lit_dst.height;
+                                            lit_info.flags = 0;
+                                            lit_info.src_rect = &lit_src;
+                                            lit_info.dst_rect = &lit_dst;
+                                            lit25d_blit(&lit_info, 0, TIG_LIT25D_INDOOR);
                                         }
                                     }
 
