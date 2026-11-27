@@ -396,11 +396,12 @@ static bool lit25d_provide(TigLit25dFrame* frame)
             }
 
             TigLit25dLight* l = &(frame->lights[frame->num_lights++]);
-            // The game draws a light's glow where the flame is, so that
-            // point on screen is LIT25D_LAMP_H above the lamp's footprint.
+            // The light's hot spot: at the flame for some lamps, at the
+            // base for others (candlesticks). z < 0 asks the pass to find the
+            // flame in the frame and place the light from that.
             l->x = (float)(x + LIT25D_MARGIN);
-            l->y = (float)(y + LIT25D_MARGIN) + LIT25D_LAMP_H;
-            l->z = LIT25D_LAMP_H;
+            l->y = (float)(y + LIT25D_MARGIN);
+            l->z = -1.0f;
             // The light art is the game's own falloff blob; its width is the
             // reach on screen.
             l->radius = (float)art_frame_data.width * 0.6f;

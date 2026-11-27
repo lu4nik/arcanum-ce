@@ -40,20 +40,17 @@ void main() {
     if (cls == 4u) { frag = vec4(y + ROOF_H, ROOF_H, 4.0, 1.0); return; }
     float a = anchor_of(c);
     if (cls == 3u) {
-        int dl = 0;
-        int dr = 0;
-        for (int i = 1; i <= 90; i++) { if (code_at(q - ivec2(i, 0)) != c) break; dl = i; }
-        for (int i = 1; i <= 90; i++) { if (code_at(q + ivec2(i, 0)) != c) break; dr = i; }
-        uint cl = code_at(q - ivec2(dl + 1, 0));
-        uint cr = code_at(q + ivec2(dr + 1, 0));
-        bool hl = cl != NONE && cls_of(cl) == 3u && abs(anchor_of(cl) - a) <= 30.0;
-        bool hr = cr != NONE && cls_of(cr) == 3u && abs(anchor_of(cr) - a) <= 30.0;
-        float el = hl ? (a + anchor_of(cl)) * 0.5 : a;
-        float er = hr ? (a + anchor_of(cr)) * 0.5 : a;
-        if (hl && !hr) er = a + (a - el);
-        if (hr && !hl) el = a + (a - er);
-        float t = (float(dl) + 0.5) / float(dl + dr + 1);
-        a = mix(el, er, t);
+        // Where this column of the wall meets the floor: walk down past the
+        // wall (and anything standing in front of it) to the first floor
+        // pixel. Continuous along the wall, unlike the per-piece anchors;
+        // kept near the piece's own base in case furniture hides the foot.
+        float base = a;
+        for (int i = 1; i <= 200; i += 2) {
+            uint cc = code_at(q + ivec2(0, i));
+            if (cc == NONE) break;
+            if (cls_of(cc) == 0u) { base = float(q.y + i); break; }
+        }
+        a = clamp(base, a - 26.0, a + 26.0);
     }
     frag = vec4(a, max(a - y, 0.0), float(cls), 1.0);
 }

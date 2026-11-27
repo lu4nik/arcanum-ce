@@ -346,6 +346,57 @@ static void lit_upload(SDL_GPUCopyPass* copy, SDL_GPUTransferBuffer* tb, SDL_GPU
     SDL_UploadToGPUTexture(copy, &src_info, &region, true);
 }
 
+// Lamps whose height is unknown (z < 0): look for the flame in the frame,
+// straight above the light's hot spot. Found close to the hot spot = the hot
+// spot is the flame, and the lamp stands ~55 px lower; found higher up = the
+// hot spot is the lamp's base. Only lamps with a visible flame get a halo.
+static void lit_place_lamps(const uint32_t* src, int pitch_px, int w, int h)
+{
+    for (int i = 0; i < lit_frame.num_lights && i < TIG_LIT25D_MAX_LIGHTS; i++) {
+        TigLit25dLight* l = &lit_frame.lights[i];
+        if (l->z >= 0.0f) {
+            continue;
+        }
+
+        int sx = (int)l->x + lit_frame.x;
+        int sy = (int)l->y + lit_frame.y;
+        float best = 0.0f;
+        int best_k = 0;
+        for (int k = -6; k <= 90; k += 2) {
+            int y = sy - k;
+            if (y < 0 || y >= h) {
+                continue;
+            }
+            for (int dx = -2; dx <= 2; dx++) {
+                int x = sx + dx;
+                if (x < 0 || x >= w) {
+                    continue;
+                }
+                uint32_t p = src[(size_t)y * (size_t)pitch_px + (size_t)x];
+                float luma = ((float)((p >> 16) & 0xFF) * 0.299f
+                                 + (float)((p >> 8) & 0xFF) * 0.587f
+                                 + (float)(p & 0xFF) * 0.114f)
+                    / 255.0f;
+                if (luma > best) {
+                    best = luma;
+                    best_k = k;
+                }
+            }
+        }
+
+        bool flame = best > 0.72f;
+        if (flame && best_k >= 14) {
+            l->z = (float)best_k;
+        } else {
+            l->z = 55.0f;
+            l->y += 55.0f;
+        }
+        if (flame) {
+            l->flicker += 1.0f; // halo flag, read as alpha >= 1 in the shader
+        }
+    }
+}
+
 static void lit_fill_uniforms(void)
 {
     LitUniforms* u = &lit_uniforms;
@@ -405,6 +456,7 @@ bool tig_lit25d_apply(const uint32_t* src, int src_pitch_px, int w, int h, uint3
         return false;
     }
 
+    lit_place_lamps(src, src_pitch_px, w, h);
     lit_fill_uniforms();
 
     SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(lit_device);

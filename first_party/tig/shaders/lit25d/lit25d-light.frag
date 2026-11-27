@@ -131,11 +131,15 @@ void main() {
         vec4 lp = u_lpos[i];
         vec3 lw = vec3(lp.x, lp.y * 2.0, lp.z);
         vec3 d = lw - w;
+        // A wall is lit on its front face only: lamps behind it don't count.
+        if (cls == 3u && d.y < -6.0) continue;
+        // Roofs cover lamps rather than catch their light.
+        if (cls == 4u) continue;
         float dist = length(d);
         if (dist >= lp.w) continue;
         float att = 1.0 - dist / lp.w;
         att *= att;
-        float fl = u_lcol[i].a;
+        float fl = fract(u_lcol[i].a);
         float fi = float(i);
         att *= 1.0 + fl * (0.6 * sin(u_time * 6.1 + fi * 1.7) + 0.4 * sin(u_time * 13.7 + fi * 3.9));
         float ndl = max(dot(n, d / max(dist, 1.0)), 0.0) * 0.85 + 0.15;
@@ -149,12 +153,14 @@ void main() {
             vec2 ls = vec2(lp.x, lp.y);
             vec2 dd = vec2(q) - ls;
             float below = smoothstep(-4.0, 10.0, dd.y);
-            float streak = exp(-dd.x * dd.x / 90.0 - dd.y * dd.y / 5200.0) * below;
-            float wet = 0.55 + 4.0 * (abs(gx) + abs(gy));
-            glow += u_lcol[i].rgb * streak * wet * sh * 0.35 * u_night;
+            float streak = exp(-dd.x * dd.x / 60.0 - dd.y * dd.y / 3200.0) * below;
+            glow += u_lcol[i].rgb * streak * sh * 0.16 * u_night;
         }
     }
     for (int i = 0; i < u_num_lights; i++) {
+        // Only lamps with a visible flame (alpha >= 1) glow in the air; the
+        // game also has invisible light sources for mood.
+        if (u_lcol[i].a < 1.0) continue;
         vec4 lp = u_lpos[i];
         vec2 flame = vec2(lp.x, lp.y - lp.z);
         vec2 dd = vec2(q) - flame;
