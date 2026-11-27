@@ -31,6 +31,19 @@ float anchor_of(uint c) {
     if (s >= 32768) s -= 65536;
     return float(s);
 }
+// Floor line under a wall pixel: walk down through wall pixels to the first
+// floor pixel. Anything else in between (furniture in front) = unknown.
+float column_base(ivec2 q, float a) {
+    if (cls_of(code_at(q)) != 3u) return -1e6;
+    for (int i = 1; i <= 200; i += 2) {
+        uint cc = code_at(q + ivec2(0, i));
+        if (cc == NONE) return -1e6;
+        uint k = cls_of(cc);
+        if (k == 0u) return clamp(float(q.y + i), a - 26.0, a + 26.0);
+        if (k != 3u) return -1e6;
+    }
+    return -1e6;
+}
 void main() {
     ivec2 q = ivec2(gl_FragCoord.xy);
     uint c = code_at(q);
@@ -40,17 +53,27 @@ void main() {
     if (cls == 4u) { frag = vec4(y + ROOF_H, ROOF_H, 4.0, 1.0); return; }
     float a = anchor_of(c);
     if (cls == 3u) {
-        // Where this column of the wall meets the floor: walk down past the
-        // wall (and anything standing in front of it) to the first floor
-        // pixel. Continuous along the wall, unlike the per-piece anchors;
-        // kept near the piece's own base in case furniture hides the foot.
-        float base = a;
-        for (int i = 1; i <= 200; i += 2) {
-            uint cc = code_at(q + ivec2(0, i));
-            if (cc == NONE) break;
-            if (cls_of(cc) == 0u) { base = float(q.y + i); break; }
+        // Where this wall meets the floor. Own column first; if something
+        // stands in front of the wall there (a candlestick), take the
+        // nearest free columns left and right instead and interpolate, so
+        // the wall behind it stays continuous.
+        float own = column_base(q, a);
+        if (own > -1e5) {
+            a = own;
+        } else {
+            float bl = -1e6;
+            float br = -1e6;
+            int dl = 0;
+            int dr = 0;
+            for (int i = 2; i <= 48; i += 2) {
+                if (bl < -1e5) { float b = column_base(q - ivec2(i, 0), a); if (b > -1e5) { bl = b; dl = i; } }
+                if (br < -1e5) { float b = column_base(q + ivec2(i, 0), a); if (b > -1e5) { br = b; dr = i; } }
+                if (bl > -1e5 && br > -1e5) break;
+            }
+            if (bl > -1e5 && br > -1e5) a = mix(bl, br, float(dl) / float(dl + dr));
+            else if (bl > -1e5) a = bl;
+            else if (br > -1e5) a = br;
         }
-        a = clamp(base, a - 26.0, a + 26.0);
     }
     frag = vec4(a, max(a - y, 0.0), float(cls), 1.0);
 }
