@@ -213,6 +213,51 @@ fragment main0_out main0(main0_in in [[stage_in]], constant SfxUniforms& _67 [[b
     }
     float2 res = _179;
     out.FragColor = PassPrev5Texture.sample(PassPrev5TextureSmplr, (in.TEX0.xy + (res / float4(_67.TextureSize, float2(1.0) / _67.TextureSize).xy)));
+    out.FragColor.w = 1.0;
+    float2 px = floor(in.TEX0.xy * float4(_67.TextureSize, float2(1.0) / _67.TextureSize).xy);
+    bool _290 = px.x >= 1.0;
+    bool _296;
+    if (_290)
+    {
+        _296 = px.y >= 1.0;
+    }
+    else
+    {
+        _296 = _290;
+    }
+    bool _315;
+    if (_296)
+    {
+        _315 = px.x < (float4(_67.TextureSize, float2(1.0) / _67.TextureSize).x - 1.0);
+    }
+    else
+    {
+        _315 = _296;
+    }
+    bool _334;
+    if (_315)
+    {
+        _334 = px.y < (float4(_67.TextureSize, float2(1.0) / _67.TextureSize).y - 1.0);
+    }
+    else
+    {
+        _334 = _315;
+    }
+    if (_334)
+    {
+        float2 c = (px + float2(0.5)) * float4(_67.TextureSize, float2(1.0) / _67.TextureSize).zw;
+        float3 e = PassPrev5Texture.sample(PassPrev5TextureSmplr, c, int2(0)).xyz;
+        float3 l = PassPrev5Texture.sample(PassPrev5TextureSmplr, c, int2(-1, 0)).xyz;
+        float3 r = PassPrev5Texture.sample(PassPrev5TextureSmplr, c, int2(1, 0)).xyz;
+        float3 u = PassPrev5Texture.sample(PassPrev5TextureSmplr, c, int2(0, -1)).xyz;
+        float3 d = PassPrev5Texture.sample(PassPrev5TextureSmplr, c, int2(0, 1)).xyz;
+        int crs = (int(all(l == u)) + int(all(l == r))) + int(all(l == d));
+        int dia = ((int(all(PassPrev5Texture.sample(PassPrev5TextureSmplr, c, int2(-1)).xyz == e)) + int(all(PassPrev5Texture.sample(PassPrev5TextureSmplr, c, int2(1, -1)).xyz == e))) + int(all(PassPrev5Texture.sample(PassPrev5TextureSmplr, c, int2(-1, 1)).xyz == e))) + int(all(PassPrev5Texture.sample(PassPrev5TextureSmplr, c, int2(1)).xyz == e));
+        if ((any(l != e) && (crs >= 2)) && (dia >= 3))
+        {
+            out.FragColor = float4(e, 1.0);
+        }
+    }
     return out;
 }
 

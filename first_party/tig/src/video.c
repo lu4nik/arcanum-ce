@@ -578,6 +578,92 @@ static SDL_Texture* tig_video_smooth_frame(void)
     return tig_video_smooth_texture;
 }
 
+// Local tweak: ScaleFX straight on the SDL "gpu" renderer's device (D3D12,
+// Metal or Vulkan). The passes write into a GPU texture that is drawn as is,
+// so nothing is read back or uploaded again at 3x size, unlike
+// tig_video_smooth_frame(). Returns NULL when the renderer is another one or
+// ScaleFX cannot run on its device; the caller then takes the old path.
+static int tig_video_sfx_direct = 0; // 0 untried, 1 in use, -1 unavailable
+static SDL_Texture* tig_video_sfx_texture;
+static SDL_GPUTexture* tig_video_sfx_wrapped;
+
+static SDL_Texture* tig_video_scalefx_direct(void)
+{
+    SDL_Surface* surface = tig_video_state.surface;
+    int w = surface->w;
+    int h = surface->h;
+
+    if (tig_video_sfx_direct < 0) {
+        return NULL;
+    }
+
+    if (tig_video_sfx_direct == 0) {
+        SDL_PropertiesID props = SDL_GetRendererProperties(tig_video_state.renderer);
+        SDL_GPUDevice* device = (SDL_GPUDevice*)SDL_GetPointerProperty(props, SDL_PROP_RENDERER_GPU_DEVICE_POINTER, NULL);
+        tig_video_sfx_direct = device != NULL && tig_scalefx_gpu_attach(device, "HighRes/shaders") ? 1 : -1;
+        if (tig_video_sfx_direct < 0) {
+            return NULL;
+        }
+    }
+
+    // Unchanged frame: the last result is still valid (always re-filter when
+    // benchmarking with ARCANUM_FLIP_BENCH=1).
+    static int bench = -1;
+    if (bench < 0) {
+        bench = SDL_getenv("ARCANUM_FLIP_BENCH") != NULL;
+    }
+    size_t size = (size_t)surface->pitch * (size_t)h;
+    if (!bench
+        && tig_video_sfx_texture != NULL
+        && tig_video_smooth_prev != NULL
+        && tig_video_smooth_prev_size == size
+        && SDL_memcmp(tig_video_smooth_prev, surface->pixels, size) == 0) {
+        return tig_video_sfx_texture;
+    }
+
+    SDL_GPUTexture* result = tig_scalefx_gpu_render((const uint32_t*)surface->pixels, surface->pitch / 4, w, h);
+    if (result == NULL) {
+        tig_video_sfx_direct = -1;
+        return NULL;
+    }
+
+    if (result != tig_video_sfx_wrapped) {
+        if (tig_video_sfx_texture != NULL) {
+            SDL_DestroyTexture(tig_video_sfx_texture);
+        }
+
+        SDL_PropertiesID props = SDL_CreateProperties();
+        SDL_SetNumberProperty(props, SDL_PROP_TEXTURE_CREATE_FORMAT_NUMBER, SDL_PIXELFORMAT_ARGB8888);
+        SDL_SetNumberProperty(props, SDL_PROP_TEXTURE_CREATE_ACCESS_NUMBER, SDL_TEXTUREACCESS_STATIC);
+        SDL_SetNumberProperty(props, SDL_PROP_TEXTURE_CREATE_WIDTH_NUMBER, w * 3);
+        SDL_SetNumberProperty(props, SDL_PROP_TEXTURE_CREATE_HEIGHT_NUMBER, h * 3);
+        SDL_SetPointerProperty(props, SDL_PROP_TEXTURE_CREATE_GPU_TEXTURE_POINTER, result);
+        tig_video_sfx_texture = SDL_CreateTextureWithProperties(tig_video_state.renderer, props);
+        SDL_DestroyProperties(props);
+
+        if (tig_video_sfx_texture == NULL) {
+            tig_debug_printf("TIG Video: ScaleFX texture: %s\n", SDL_GetError());
+            tig_video_sfx_wrapped = NULL;
+            tig_video_sfx_direct = -1;
+            return NULL;
+        }
+        SDL_SetTextureScaleMode(tig_video_sfx_texture, SDL_SCALEMODE_LINEAR);
+        SDL_SetTextureBlendMode(tig_video_sfx_texture, SDL_BLENDMODE_NONE);
+        tig_video_sfx_wrapped = result;
+    }
+
+    if (tig_video_smooth_prev_size != size) {
+        SDL_free(tig_video_smooth_prev);
+        tig_video_smooth_prev = SDL_malloc(size);
+        tig_video_smooth_prev_size = tig_video_smooth_prev != NULL ? size : 0;
+    }
+    if (tig_video_smooth_prev != NULL) {
+        SDL_memcpy(tig_video_smooth_prev, surface->pixels, size);
+    }
+
+    return tig_video_sfx_texture;
+}
+
 int tig_video_flip(void)
 {
     // Local tweak: optional frame-cost log (ARCANUM_FLIP_BENCH=1).
@@ -590,11 +676,25 @@ int tig_video_flip(void)
     Uint64 flip_start = flip_bench ? SDL_GetTicksNS() : 0;
 
     SDL_Texture* smooth = NULL;
+    bool direct = false;
     if (tig_video_smooth && SDL_BYTESPERPIXEL(tig_video_state.surface->format) == 4) {
-        smooth = tig_video_smooth_frame();
+        if (tig_video_smooth == 3) {
+            smooth = tig_video_scalefx_direct();
+            direct = smooth != NULL;
+        }
+        if (smooth == NULL) {
+            smooth = tig_video_smooth_frame();
+        }
     }
 
-    if (smooth == NULL) {
+    // The direct path has no CPU copy to keep UI windows crisp in, so it
+    // draws them from the plain frame on top (SmoothUI=0).
+    TigRect crisp[64];
+    int num_crisp = direct && !tig_video_smooth_ui
+        ? tig_window_overlay_rects(tig_video_state.surface->w, tig_video_state.surface->h, crisp, 64)
+        : 0;
+
+    if (smooth == NULL || num_crisp > 0) {
         SDL_UpdateTexture(tig_video_state.texture, NULL, tig_video_state.surface->pixels, tig_video_state.surface->pitch);
     }
 
@@ -603,6 +703,10 @@ int tig_video_flip(void)
     SDL_SetRenderDrawColor(tig_video_state.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
     SDL_RenderClear(tig_video_state.renderer);
     SDL_RenderTexture(tig_video_state.renderer, smooth != NULL ? smooth : tig_video_state.texture, NULL, NULL);
+    for (int r = 0; r < num_crisp; r++) {
+        SDL_FRect rect = { (float)crisp[r].x, (float)crisp[r].y, (float)crisp[r].width, (float)crisp[r].height };
+        SDL_RenderTexture(tig_video_state.renderer, tig_video_state.texture, &rect, &rect);
+    }
 
     if (tig_fade_state.enabled) {
         SDL_BlendMode blend_mode;
@@ -1788,6 +1892,13 @@ void tig_video_window_destroy(void)
     SDL_free(tig_video_smooth_prev);
     tig_video_smooth_prev = NULL;
     tig_video_smooth_prev_size = 0;
+    // The direct ScaleFX texture only wraps a GPU texture ScaleFX owns.
+    if (tig_video_sfx_texture != NULL) {
+        SDL_DestroyTexture(tig_video_sfx_texture);
+        tig_video_sfx_texture = NULL;
+    }
+    tig_video_sfx_wrapped = NULL;
+    tig_video_sfx_direct = 0;
     tig_scalefx_exit();
 
     if (tig_video_state.texture != NULL) {

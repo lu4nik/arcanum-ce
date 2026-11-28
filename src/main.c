@@ -172,6 +172,15 @@ int main(int argc, char** argv)
     tig_gamepad_set_targets_callback(main_gamepad_targets);
     tig_gamepad_set_cycle_callback(main_gamepad_next_target);
 
+#if SDL_PLATFORM_WINDOWS
+    // Local tweak: with ScaleFX chosen, present through SDL's GPU renderer
+    // (Direct3D 12, or Vulkan) so the filter draws straight to the screen
+    // instead of reading 3x frames back; Direct3D 11 if that cannot start.
+    if (highres_config->smooth == 3) {
+        SDL_SetHint(SDL_HINT_RENDER_DRIVER, "gpu,direct3d11");
+    }
+#endif
+
 #if SDL_PLATFORM_MACOS
     // Local tweak: Renderer=1 in HighRes/config.ini presents through Metal
     // instead of OpenGL (overrides the driver hint set in tig video).

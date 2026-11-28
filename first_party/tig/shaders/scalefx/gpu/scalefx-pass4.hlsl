@@ -225,6 +225,55 @@ void frag_main()
     }
     float2 res = _179;
     FragColor = PassPrev5Texture.Sample(_PassPrev5Texture_sampler, TEX0.xy + (res / float4(_67_TextureSize, 1.0f.xx / _67_TextureSize).xy));
+    FragColor.w = 1.0f;
+    float2 px = floor(TEX0.xy * float4(_67_TextureSize, 1.0f.xx / _67_TextureSize).xy);
+    bool _290 = px.x >= 1.0f;
+    bool _296;
+    if (_290)
+    {
+        _296 = px.y >= 1.0f;
+    }
+    else
+    {
+        _296 = _290;
+    }
+    bool _315;
+    if (_296)
+    {
+        _315 = px.x < (float4(_67_TextureSize, 1.0f.xx / _67_TextureSize).x - 1.0f);
+    }
+    else
+    {
+        _315 = _296;
+    }
+    bool _334;
+    if (_315)
+    {
+        _334 = px.y < (float4(_67_TextureSize, 1.0f.xx / _67_TextureSize).y - 1.0f);
+    }
+    else
+    {
+        _334 = _315;
+    }
+    if (_334)
+    {
+        float2 c = (px + 0.5f.xx) * float4(_67_TextureSize, 1.0f.xx / _67_TextureSize).zw;
+        float3 e = PassPrev5Texture.Sample(_PassPrev5Texture_sampler, c, int2(0, 0)).xyz;
+        float3 l = PassPrev5Texture.Sample(_PassPrev5Texture_sampler, c, int2(-1, 0)).xyz;
+        float3 r = PassPrev5Texture.Sample(_PassPrev5Texture_sampler, c, int2(1, 0)).xyz;
+        float3 u = PassPrev5Texture.Sample(_PassPrev5Texture_sampler, c, int2(0, -1)).xyz;
+        float3 d = PassPrev5Texture.Sample(_PassPrev5Texture_sampler, c, int2(0, 1)).xyz;
+        int crs = (int(all(bool3(l.x == u.x, l.y == u.y, l.z == u.z))) + int(all(bool3(l.x == r.x, l.y == r.y, l.z == r.z)))) + int(all(bool3(l.x == d.x, l.y == d.y, l.z == d.z)));
+        float3 _414 = PassPrev5Texture.Sample(_PassPrev5Texture_sampler, c, int2(-1, -1)).xyz;
+        float3 _423 = PassPrev5Texture.Sample(_PassPrev5Texture_sampler, c, int2(1, -1)).xyz;
+        float3 _433 = PassPrev5Texture.Sample(_PassPrev5Texture_sampler, c, int2(-1, 1)).xyz;
+        float3 _443 = PassPrev5Texture.Sample(_PassPrev5Texture_sampler, c, int2(1, 1)).xyz;
+        int dia = ((int(all(bool3(_414.x == e.x, _414.y == e.y, _414.z == e.z))) + int(all(bool3(_423.x == e.x, _423.y == e.y, _423.z == e.z)))) + int(all(bool3(_433.x == e.x, _433.y == e.y, _433.z == e.z)))) + int(all(bool3(_443.x == e.x, _443.y == e.y, _443.z == e.z)));
+        if ((any(bool3(l.x != e.x, l.y != e.y, l.z != e.z)) && (crs >= 2)) && (dia >= 3))
+        {
+            FragColor = float4(e, 1.0f);
+        }
+    }
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)

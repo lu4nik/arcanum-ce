@@ -23,7 +23,9 @@ in; "UAP Rules" option in the video tab, on by default). If you change the
 set of .dat files, delete data\proto once so the game rebuilds it.
 
 Settings: HighRes\config.ini (or Options > Video in game); F9 cycles the
-smoothing filters. Debug log: %APPDATA%\arcanum-ce\logs\arcanum-ce.log.
+smoothing filters. For smoothing pick ScaleFX (needs Direct3D 12 or Vulkan;
+restart the game once after choosing it); xBR/xBRZ run on the CPU and are
+slow. Debug log: %APPDATA%\arcanum-ce\logs\arcanum-ce.log.
 
 What the fork adds over upstream CE (see the repository for details):
 - Engine bug fixes: 50 places where CE behaved differently from the original
@@ -31,7 +33,8 @@ What the fork adds over upstream CE (see the repository for details):
   spells, reaction), plus fixes for bugs of the original game itself.
 - Gamepad support (DualSense, DualShock 4, Xbox, Switch Pro, Steam Input) as
   a virtual mouse and keyboard; hold L1/L2/R1 or PS for the button chart.
-- Automatic resolution and in-game Scale / Smoothing options, xBR smoothing.
+- Automatic resolution and in-game Scale / Smoothing options; ScaleFX
+  smoothing on the graphics card, xBR/xBRZ on the CPU.
 - Autosave every 10 minutes into two rotating slots (F7 is never overwritten).
 - Cyrillic (cp1251) text input; translated games keep NPC stats and genders.
 - Ctrl+click moves items in loot, barter and steal windows.

@@ -6,9 +6,16 @@
 // private GPU device and reads the 3x result back into memory, so the game
 // keeps presenting through its SDL renderer as before.
 //
+// Two ways to use it: tig_scalefx_gpu_run() on a private device, reading the
+// 3x frame back into memory (works under any SDL renderer, but moving ~33 MB
+// per frame each way is slow on many PCs); or, when the SDL renderer itself
+// is the "gpu" one, tig_scalefx_gpu_attach() + tig_scalefx_gpu_render() run
+// the passes on the renderer's device and hand back the GPU texture to draw,
+// with no readback at all.
+//
 // Shaders are loaded at runtime from HighRes/shaders/: scalefx-*.msl for
 // Metal, scalefx-*.hlsl for Direct3D 12 (compiled to DXBC with the system's
-// d3dcompiler_47.dll).
+// d3dcompiler_47.dll), scalefx-*.spv for Vulkan.
 
 #include "tig/scalefx_gl.h"
 
@@ -62,6 +69,8 @@ static int sfx_w;
 static int sfx_h;
 static bool sfx_ready;
 static bool sfx_failed;
+// False when the device belongs to the SDL renderer (direct path).
+static bool sfx_own_device;
 
 static char* read_file(const char* path, size_t* size_ptr)
 {
@@ -162,6 +171,11 @@ static SDL_GPUShader* load_shader(const char* shader_dir, const char* name, bool
         info.format = SDL_GPU_SHADERFORMAT_DXBC;
         info.entrypoint = "main";
 #endif
+    } else if ((formats & SDL_GPU_SHADERFORMAT_SPIRV) != 0) {
+        snprintf(path, sizeof(path), "%s/%s.spv", shader_dir, name);
+        code = read_file(path, &size);
+        info.format = SDL_GPU_SHADERFORMAT_SPIRV;
+        info.entrypoint = "main";
     } else {
         SDL_Log("ScaleFX GPU: no usable shader format (0x%x)", (unsigned)formats);
         return NULL;
@@ -252,11 +266,14 @@ static bool make_targets(int w, int h)
     tb.size = (Uint32)w * (Uint32)h * 4;
     sfx_upload = SDL_CreateGPUTransferBuffer(sfx_device, &tb);
 
-    tb.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
-    tb.size = (Uint32)cw * (Uint32)ch * 4;
-    sfx_download = SDL_CreateGPUTransferBuffer(sfx_device, &tb);
+    // The readback buffer is only needed on the private-device path.
+    if (sfx_own_device) {
+        tb.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
+        tb.size = (Uint32)cw * (Uint32)ch * 4;
+        sfx_download = SDL_CreateGPUTransferBuffer(sfx_device, &tb);
+    }
 
-    if (sfx_upload == NULL || sfx_download == NULL) {
+    if (sfx_upload == NULL || (sfx_own_device && sfx_download == NULL)) {
         return false;
     }
 
@@ -264,6 +281,8 @@ static bool make_targets(int w, int h)
     sfx_h = h;
     return true;
 }
+
+static bool sfx_setup(const char* shader_dir);
 
 bool tig_scalefx_gpu_init(const char* shader_dir)
 {
@@ -286,7 +305,48 @@ bool tig_scalefx_gpu_init(const char* shader_dir)
         SDL_Log("ScaleFX GPU: no GPU device: %s", SDL_GetError());
         return false;
     }
+    sfx_own_device = true;
 
+    if (!sfx_setup(shader_dir)) {
+        return false;
+    }
+
+    sfx_failed = false;
+    sfx_ready = true;
+    SDL_Log("ScaleFX GPU: ready (%s)", SDL_GetGPUDeviceDriver(sfx_device));
+    return true;
+}
+
+bool tig_scalefx_gpu_attach(SDL_GPUDevice* device, const char* shader_dir)
+{
+    static bool attach_failed;
+
+    if (sfx_ready && sfx_device == device) {
+        return true;
+    }
+    if (attach_failed) {
+        return false;
+    }
+
+    // Drop a private device from the readback path first.
+    tig_scalefx_gpu_exit();
+    sfx_failed = false;
+
+    sfx_device = device;
+    sfx_own_device = false;
+    if (!sfx_setup(shader_dir)) {
+        attach_failed = true;
+        return false;
+    }
+
+    sfx_ready = true;
+    SDL_Log("ScaleFX GPU: rendering on the renderer's device (%s)", SDL_GetGPUDeviceDriver(sfx_device));
+    return true;
+}
+
+// Shaders, pipelines and the sampler on sfx_device.
+static bool sfx_setup(const char* shader_dir)
+{
     for (int i = 0; i < SFX_PASSES; i++) {
         if (!SDL_GPUTextureSupportsFormat(sfx_device, sfx_format[i], SDL_GPU_TEXTURETYPE_2D,
                 SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET)) {
@@ -354,27 +414,26 @@ bool tig_scalefx_gpu_init(const char* shader_dir)
         return false;
     }
 
-    sfx_failed = false;
-    sfx_ready = true;
-    SDL_Log("ScaleFX GPU: ready (%s)", SDL_GetGPUDeviceDriver(sfx_device));
     return true;
 }
 
-bool tig_scalefx_gpu_run(const uint32_t* src, int src_pitch_px, int w, int h, uint32_t* dst, int dst_pitch_px)
+// Uploads the frame and records the five passes; the result ends up in the
+// last pass's texture. Returns the command buffer (not submitted yet).
+static SDL_GPUCommandBuffer* sfx_encode(const uint32_t* src, int src_pitch_px, int w, int h)
 {
     if (!sfx_ready) {
-        return false;
+        return NULL;
     }
 
     if ((w != sfx_w || h != sfx_h) && !make_targets(w, h)) {
         free_targets();
-        return false;
+        return NULL;
     }
 
     // Upload the frame (XRGB8888 = BGRA bytes).
     uint8_t* up = (uint8_t*)SDL_MapGPUTransferBuffer(sfx_device, sfx_upload, true);
     if (up == NULL) {
-        return false;
+        return NULL;
     }
     for (int y = 0; y < h; y++) {
         memcpy(up + (size_t)y * (size_t)w * 4, src + (size_t)y * (size_t)src_pitch_px, (size_t)w * 4);
@@ -383,7 +442,7 @@ bool tig_scalefx_gpu_run(const uint32_t* src, int src_pitch_px, int w, int h, ui
 
     SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(sfx_device);
     if (cmd == NULL) {
-        return false;
+        return NULL;
     }
 
     SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(cmd);
@@ -440,8 +499,39 @@ bool tig_scalefx_gpu_run(const uint32_t* src, int src_pitch_px, int w, int h, ui
         SDL_EndGPURenderPass(rp);
     }
 
+    return cmd;
+}
+
+SDL_GPUTexture* tig_scalefx_gpu_render(const uint32_t* src, int src_pitch_px, int w, int h)
+{
+    SDL_GPUCommandBuffer* cmd = sfx_encode(src, src_pitch_px, w, h);
+    if (cmd == NULL) {
+        return NULL;
+    }
+
+    // Same queue as the renderer: this runs before the frame that samples it.
+    if (!SDL_SubmitGPUCommandBuffer(cmd)) {
+        return NULL;
+    }
+
+    static int logged;
+    if (!logged) {
+        logged = 1;
+        SDL_Log("ScaleFX GPU: direct frame %dx%d -> %dx%d", w, h, w * 3, h * 3);
+    }
+    return sfx_passes[SFX_PASSES - 1].tex;
+}
+
+bool tig_scalefx_gpu_run(const uint32_t* src, int src_pitch_px, int w, int h, uint32_t* dst, int dst_pitch_px)
+{
+    SDL_GPUCommandBuffer* cmd = sfx_encode(src, src_pitch_px, w, h);
+    if (cmd == NULL) {
+        return false;
+    }
+
     SfxGpuPass* last = &sfx_passes[SFX_PASSES - 1];
-    copy = SDL_BeginGPUCopyPass(cmd);
+    SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(cmd);
+    SDL_GPUTextureRegion region;
     SDL_zero(region);
     region.texture = last->tex;
     region.w = (Uint32)last->width;
@@ -495,7 +585,10 @@ void tig_scalefx_gpu_exit(void)
         SDL_ReleaseGPUSampler(sfx_device, sfx_sampler);
         sfx_sampler = NULL;
     }
-    SDL_DestroyGPUDevice(sfx_device);
+    if (sfx_own_device) {
+        SDL_DestroyGPUDevice(sfx_device);
+    }
     sfx_device = NULL;
+    sfx_own_device = false;
     sfx_ready = false;
 }

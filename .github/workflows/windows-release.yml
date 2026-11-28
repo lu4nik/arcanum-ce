@@ -46,7 +46,7 @@ jobs:
           cp out/build/windows-x86/Release/arcanum-ce.exe "pkg/$name/"
           cp -R dist/windows/HighRes "pkg/$name/"
           mkdir -p "pkg/$name/HighRes/shaders"
-          cp first_party/tig/shaders/scalefx/gpu/*.hlsl "pkg/$name/HighRes/shaders/"
+          cp first_party/tig/shaders/scalefx/gpu/*.hlsl first_party/tig/shaders/scalefx/gpu/*.spv "pkg/$name/HighRes/shaders/"
           cp dist/windows/README-Windows.txt "pkg/$name/"
           cp LICENSE.md "pkg/$name/licenses/arcanum-ce-LICENSE.md"
           (cd pkg && 7z a -tzip "$name.zip" "$name" > /dev/null)

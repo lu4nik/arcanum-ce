@@ -38,6 +38,33 @@ void main()
 """
 
 
+# arcanum-ce, appended to the last pass: checkerboard dithering (see-through
+# walls) stays as crisp 3x3 blocks, like tig_xbr_is_checker on the CPU path.
+# PassPrev5Texture is the source frame; SourceSize is its size.
+CHECKER = """
+    FragColor.a = 1.0;
+    {
+        vec2 px = floor(vTexCoord * SourceSize.xy);
+        if (px.x >= 1.0 && px.y >= 1.0 && px.x < SourceSize.x - 1.0 && px.y < SourceSize.y - 1.0) {
+            vec2 c = (px + 0.5) * SourceSize.zw;
+            vec3 e = textureOffset(PassPrev5Texture, c, ivec2(0, 0)).rgb;
+            vec3 l = textureOffset(PassPrev5Texture, c, ivec2(-1, 0)).rgb;
+            vec3 r = textureOffset(PassPrev5Texture, c, ivec2(1, 0)).rgb;
+            vec3 u = textureOffset(PassPrev5Texture, c, ivec2(0, -1)).rgb;
+            vec3 d = textureOffset(PassPrev5Texture, c, ivec2(0, 1)).rgb;
+            int crs = int(l == u) + int(l == r) + int(l == d);
+            int dia = int(textureOffset(PassPrev5Texture, c, ivec2(-1, -1)).rgb == e)
+                + int(textureOffset(PassPrev5Texture, c, ivec2(1, -1)).rgb == e)
+                + int(textureOffset(PassPrev5Texture, c, ivec2(-1, 1)).rgb == e)
+                + int(textureOffset(PassPrev5Texture, c, ivec2(1, 1)).rgb == e);
+            if (l != e && crs >= 2 && dia >= 3) {
+                FragColor = vec4(e, 1.0);
+            }
+        }
+    }
+"""
+
+
 def fragment(path):
     src = open(path).read()
     body = src.split("#elif defined(FRAGMENT)", 1)[1]
@@ -62,6 +89,10 @@ def fragment(path):
             if m.group(1) == "TEX0":
                 out.append("layout(location = 0) in vec4 TEX0;")
             continue  # t1..t4 only feed the GL ES branch
+        if s.startswith("FragColor = COMPAT_TEXTURE(PassPrev5Texture"):
+            out.append(line)
+            out.append(CHECKER)
+            continue
         if s == "out COMPAT_PRECISION vec4 FragColor;":
             out.append("layout(location = 0) out vec4 FragColor;")
             continue
@@ -85,6 +116,8 @@ def build(name, stage, glsl, tmp):
     spv = os.path.join(tmp, name + ".spv")
     open(gpath, "w").write(glsl)
     run("glslang", "-V", "--quiet", "-S", stage, "-o", spv, gpath)
+    with open(spv, "rb") as f_in, open(os.path.join(HERE, name + ".spv"), "wb") as f_out:
+        f_out.write(f_in.read())
     hlsl = run("spirv-cross", spv, "--hlsl", "--shader-model", "51")
     msl = run("spirv-cross", spv, "--msl", "--msl-version", "20100", "--msl-decoration-binding")
     open(os.path.join(HERE, name + ".hlsl"), "w").write(header() + hlsl)

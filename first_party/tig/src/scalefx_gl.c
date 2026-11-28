@@ -502,6 +502,25 @@ bool tig_scalefx_run(const uint32_t* src, int src_pitch_px, int w, int h, uint32
             SDL_SaveBMP(s, path);
             SDL_snprintf(path, sizeof(path), "%s-out.bmp", dump);
             SDL_SaveBMP(d, path);
+#if defined(__APPLE__) && TARGET_OS_OSX
+            // macOS: also run the other backend on the same frame (-alt.bmp).
+            uint32_t* alt = (uint32_t*)SDL_malloc((size_t)w * 3 * (size_t)h * 3 * 4);
+            bool alt_ok = false;
+            if (alt != NULL) {
+                if (sfx_use_gpu()) {
+                    alt_ok = sfx_gl_init("HighRes/shaders") && sfx_gl_run(src, src_pitch_px, w, h, alt, w * 3);
+                } else {
+                    alt_ok = tig_scalefx_gpu_init("HighRes/shaders") && tig_scalefx_gpu_run(src, src_pitch_px, w, h, alt, w * 3);
+                }
+            }
+            if (alt_ok) {
+                SDL_Surface* a = SDL_CreateSurfaceFrom(w * 3, h * 3, SDL_PIXELFORMAT_XRGB8888, alt, w * 3 * 4);
+                SDL_snprintf(path, sizeof(path), "%s-alt.bmp", dump);
+                SDL_SaveBMP(a, path);
+                SDL_DestroySurface(a);
+            }
+            SDL_free(alt);
+#endif
             SDL_DestroySurface(s);
             SDL_DestroySurface(d);
             SDL_Log("ScaleFX: dumped frame %d to %s-*.bmp", frame, dump);
