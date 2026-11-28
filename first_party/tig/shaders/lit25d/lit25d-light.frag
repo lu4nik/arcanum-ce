@@ -103,14 +103,6 @@ void main() {
     vec3 w = world_at(q);
     float jn = ign(gl_FragCoord.xy);
 
-    if (u_mode == 2) {
-        vec3 tint = cls == 0u ? vec3(0.1, 0.15, 0.4) : cls == 1u ? vec3(1.0, 0.8, 0.3)
-            : cls == 2u ? vec3(1.0, 0.3, 0.3) : cls == 3u ? vec3(0.3, 1.0, 0.4) : vec3(0.7, 0.4, 1.0);
-        float hh = clamp(w.z / 160.0, 0.0, 1.0);
-        frag = vec4(mix(src * 0.25, tint * (0.25 + 0.75 * hh), 0.8), 1.0);
-        return;
-    }
-
     float gx = 0.5 * (luma(p + ivec2(2, 0)) - luma(p - ivec2(2, 0)))
         + 0.25 * (luma(p + ivec2(2, 1)) - luma(p - ivec2(2, 1)) + luma(p + ivec2(2, -1)) - luma(p - ivec2(2, -1)));
     float gy = 0.5 * (luma(p + ivec2(0, 2)) - luma(p - ivec2(0, 2)))
@@ -131,6 +123,27 @@ void main() {
         for (int i = 1; i <= 20; i++) { if (code_at(q + ivec2(i, 0)) != code) break; dr = i; }
         float nx = float(dl - dr) / float(dl + dr + 2);
         n = normalize(vec3(nx * 1.2 - gx, sqrt(max(1.0 - nx * nx, 0.0)) * 0.8, 0.45 + gy * 1.5));
+        // Characters with baked normals (top byte, see game/lit25d.c):
+        // screen-space x right, y up, z towards the viewer.
+        uint hi = texelFetch(u_gbuf, q, 0).r >> 24;
+        uint na = hi >> 4;
+        uint nb = hi & 15u;
+        if (cls == 2u && na >= 1u && na <= 14u && nb >= 1u && nb <= 14u) {
+            float sx = (float(na) - 7.5) / 6.5;
+            float sy = (float(nb) - 7.5) / 6.5;
+            float sz = sqrt(max(1.0 - sx * sx - sy * sy, 0.05));
+            // Screen up is (0, -1, 2)/sqrt5 in the world, the view (0, 2, 1)/sqrt5.
+            n = normalize(vec3(sx, (-sy + 2.0 * sz) * 0.4472, (2.0 * sy + sz) * 0.4472));
+        }
+    }
+
+    if (u_mode == 2) {
+        vec3 tint = cls == 0u ? vec3(0.1, 0.15, 0.4) : cls == 1u ? vec3(1.0, 0.8, 0.3)
+            : cls == 2u ? vec3(1.0, 0.3, 0.3) : cls == 3u ? vec3(0.3, 1.0, 0.4) : vec3(0.7, 0.4, 1.0);
+        float hh = clamp(w.z / 160.0, 0.0, 1.0);
+        frag = vec4(mix(src * 0.25, tint * (0.25 + 0.75 * hh), 0.8), 1.0);
+        if (cls == 2u) frag = vec4(n * 0.5 + 0.5, 1.0);
+        return;
     }
 
     vec3 acc = vec3(0.0);
@@ -193,6 +206,13 @@ void main() {
         }
         sh *= 0.25;
         float facing = cls == 0u ? 1.0 : 0.8 + 0.4 * max(dot(n, sd), 0.0);
+        // Characters get real modelling from the sun: lit side, shaded side.
+        // Characters get real modelling: the sun as a key (often from behind,
+        // so a rim) and a soft fill from the viewer's side opposite to it.
+        if (cls == 2u) {
+            vec3 fill = normalize(vec3(-sd.x, 1.0, 0.9));
+            facing = 0.55 + 0.5 * max(dot(n, sd), 0.0) + 0.38 * max(dot(n, fill), 0.0);
+        }
         outc *= mix(1.0, facing * mix(0.6, 1.0, sh), u_sun);
     }
 

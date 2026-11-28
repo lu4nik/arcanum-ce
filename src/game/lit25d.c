@@ -27,6 +27,8 @@ static bool lit25d_margin_dirty;
 static bool lit25d_in_margin_pass;
 
 static bool lit25d_provide(TigLit25dFrame* frame);
+static void lit25d_char_seen(const TigArtBlitInfo* blit_info);
+static void lit25d_char_normals(const TigArtBlitInfo* blit_info, const TigRect* dst_rect, uint32_t code);
 
 // Glowing overlays seen recently: each is drawn piecewise (one piece per
 // dirty rect), so pieces of the same effect are merged into one box.
@@ -236,6 +238,11 @@ void lit25d_blit(const TigArtBlitInfo* blit_info, int anchor_y, int cls)
     info.dst_video_buffer = lit25d_gbuf;
     info.scratch_video_buffer = NULL;
     tig_art_blit(&info);
+
+    if ((cls & 15) == TIG_LIT25D_CLASS_CRITTER) {
+        lit25d_char_seen(blit_info);
+        lit25d_char_normals(blit_info, &dst_rect, code);
+    }
 }
 
 static float lit25d_brightness(tig_color_t color)
@@ -991,4 +998,198 @@ void lit25d_blit_floor(const TigArtBlitInfo* blit_info, bool indoor, int slot)
     info.dst_video_buffer = lit25d_gbuf;
     info.scratch_video_buffer = NULL;
     tig_art_blit(&info);
+}
+
+// Character normals (offline Marigold, see ~/Games/lit25d-ai). Frames are
+// keyed by art id without palette plus the horizontal flip, and stored as
+// they appear on screen, so a blit's src_rect indexes them directly.
+static uint32_t lit25d_char_key_art(const TigArtBlitInfo* blit_info)
+{
+    return (uint32_t)tig_art_id_palette_set(blit_info->art_id, 0);
+}
+
+static int lit25d_char_key_flip(const TigArtBlitInfo* blit_info)
+{
+    return (blit_info->flags & TIG_ART_BLT_FLIP_X) != 0 ? 1 : 0;
+}
+
+// With a lit25d_chars folder next to the game, every character frame drawn
+// is saved once as <art>_<flip>.bmp (magenta = transparent).
+static void lit25d_char_seen(const TigArtBlitInfo* blit_info)
+{
+    static int enabled = -1;
+    static uint32_t seen[16384];
+    TigArtFrameData fd;
+    TigVideoBufferCreateInfo vb_info;
+    TigVideoBuffer* vb;
+
+    if (enabled < 0) {
+        SDL_PathInfo pi;
+        enabled = SDL_GetPathInfo("lit25d_chars", &pi) && pi.type == SDL_PATHTYPE_DIRECTORY;
+        if (enabled) {
+            tig_debug_printf("Lit25d: dumping character frames to lit25d_chars/\n");
+        }
+    }
+    if (!enabled || lit25d_in_margin_pass) {
+        return;
+    }
+
+    tig_art_id_t art_id = (tig_art_id_t)lit25d_char_key_art(blit_info);
+    int flip = lit25d_char_key_flip(blit_info);
+    // Low bit of the stored value carries the flip; art ids keep it clear
+    // in the hash only, the file name has both.
+    uint32_t key = (uint32_t)art_id * 2u + (uint32_t)flip + 1u;
+    unsigned int h = (key * 2654435761u) & 16383u;
+    for (int i = 0; i < 16384; i++) {
+        unsigned int k = (h + (unsigned int)i) & 16383u;
+        if (seen[k] == key) {
+            return;
+        }
+        if (seen[k] == 0) {
+            seen[k] = key;
+            break;
+        }
+    }
+
+    if (tig_art_frame_data(blit_info->art_id, &fd) != TIG_OK || fd.width <= 0 || fd.height <= 0) {
+        return;
+    }
+
+    vb_info.flags = TIG_VIDEO_BUFFER_CREATE_SYSTEM_MEMORY;
+    vb_info.width = fd.width;
+    vb_info.height = fd.height;
+    vb_info.background_color = tig_color_make(255, 0, 255);
+    vb_info.color_key = 0;
+    if (tig_video_buffer_create(&vb_info, &vb) != TIG_OK) {
+        return;
+    }
+    tig_video_buffer_fill(vb, NULL, tig_color_make(255, 0, 255));
+
+    TigRect rect = { 0, 0, fd.width, fd.height };
+    TigArtBlitInfo blit;
+    SDL_zero(blit);
+    blit.flags = TIG_ART_BLT_PALETTE_ORIGINAL | (flip ? TIG_ART_BLT_FLIP_X : 0);
+    blit.art_id = blit_info->art_id;
+    blit.src_rect = &rect;
+    blit.dst_rect = &rect;
+    blit.dst_video_buffer = vb;
+    if (tig_art_blit(&blit) == TIG_OK) {
+        TigVideoBufferSaveToBmpInfo save;
+        SDL_zero(save);
+        save.video_buffer = vb;
+        save.rect = &rect;
+        SDL_snprintf(save.path, sizeof(save.path), "lit25d_chars/%08X_%d.bmp", (unsigned int)art_id, flip);
+        tig_video_buffer_save_to_bmp(&save);
+    }
+    tig_video_buffer_destroy(vb);
+}
+
+// lit25d_hd/chars.bin: "L25N", count, then count entries {art, flip, w, h,
+// offset} sorted by (art, flip), then one byte per pixel: high nibble the
+// screen-space normal's x, low nibble its y (up), each 1..14; 0 = none.
+typedef struct LitCharNormals {
+    uint32_t art;
+    uint32_t flip;
+    uint32_t width;
+    uint32_t height;
+    uint32_t offset;
+} LitCharNormals;
+static LitCharNormals* lit25d_cn_entries;
+static uint8_t* lit25d_cn_data;
+static uint32_t lit25d_cn_count;
+static bool lit25d_cn_loaded;
+
+static void lit25d_cn_load(void)
+{
+    size_t size;
+    uint8_t* buf;
+
+    lit25d_cn_loaded = true;
+    buf = (uint8_t*)SDL_LoadFile("lit25d_hd/chars.bin", &size);
+    if (buf == NULL) {
+        return;
+    }
+    if (size < 8 || SDL_memcmp(buf, "L25N", 4) != 0) {
+        SDL_free(buf);
+        return;
+    }
+    uint32_t n;
+    SDL_memcpy(&n, buf + 4, 4);
+    if (size < 8 + (size_t)n * sizeof(LitCharNormals)) {
+        SDL_free(buf);
+        return;
+    }
+    lit25d_cn_entries = (LitCharNormals*)(buf + 8);
+    lit25d_cn_data = buf + 8 + (size_t)n * sizeof(LitCharNormals);
+    lit25d_cn_count = n;
+    tig_debug_printf("Lit25d: %u character frames with normals\n", (unsigned int)n);
+}
+
+static const LitCharNormals* lit25d_cn_find(uint32_t art, uint32_t flip)
+{
+    uint32_t lo = 0;
+    uint32_t hi = lit25d_cn_count;
+    while (lo < hi) {
+        uint32_t mid = (lo + hi) / 2;
+        const LitCharNormals* e = &lit25d_cn_entries[mid];
+        if (e->art < art || (e->art == art && e->flip < flip)) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    if (lo < lit25d_cn_count && lit25d_cn_entries[lo].art == art && lit25d_cn_entries[lo].flip == flip) {
+        return &lit25d_cn_entries[lo];
+    }
+    return NULL;
+}
+
+// Puts the frame's normals into the top byte of the G-buffer pixels this
+// blit just wrote (those still holding its code).
+static void lit25d_char_normals(const TigArtBlitInfo* blit_info, const TigRect* dst_rect, uint32_t code)
+{
+    TigVideoBufferData vb_data;
+
+    if (!lit25d_cn_loaded) {
+        lit25d_cn_load();
+    }
+    if (lit25d_cn_count == 0) {
+        return;
+    }
+    const LitCharNormals* e = lit25d_cn_find(lit25d_char_key_art(blit_info), (uint32_t)lit25d_char_key_flip(blit_info));
+    if (e == NULL) {
+        return;
+    }
+    if (tig_video_buffer_lock(lit25d_gbuf) != TIG_OK) {
+        return;
+    }
+    if (tig_video_buffer_data(lit25d_gbuf, &vb_data) == TIG_OK && vb_data.pixels != NULL) {
+        const uint8_t* nm = lit25d_cn_data + e->offset;
+        const TigRect* src = blit_info->src_rect;
+        int w = SDL_min(dst_rect->width, src->width);
+        int h = SDL_min(dst_rect->height, src->height);
+        for (int y = 0; y < h; y++) {
+            int gy = dst_rect->y + y;
+            int sy = src->y + y;
+            if (gy < 0 || gy >= vb_data.height || sy < 0 || sy >= (int)e->height) {
+                continue;
+            }
+            uint32_t* row = (uint32_t*)((uint8_t*)vb_data.pixels + (size_t)gy * (size_t)vb_data.pitch);
+            for (int x = 0; x < w; x++) {
+                int gx = dst_rect->x + x;
+                int sx = src->x + x;
+                if (gx < 0 || gx >= vb_data.width || sx < 0 || sx >= (int)e->width) {
+                    continue;
+                }
+                if ((row[gx] & 0xFFFFFFu) != (code & 0xFFFFFFu)) {
+                    continue;
+                }
+                uint8_t v = nm[(size_t)sy * e->width + (size_t)sx];
+                if (v != 0) {
+                    row[gx] = (row[gx] & 0xFFFFFFu) | ((uint32_t)v << 24);
+                }
+            }
+        }
+    }
+    tig_video_buffer_unlock(lit25d_gbuf);
 }
