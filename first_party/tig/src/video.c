@@ -805,6 +805,17 @@ int tig_video_flip(void)
     tig_video_capture();
 
     SDL_RenderPresent(tig_video_state.renderer);
+    // Local test aid: present timestamps (ARCANUM_FLIP_TRACE=<file>).
+    {
+        static FILE* trace;
+        static int trace_init;
+        if (!trace_init) {
+            trace_init = 1;
+            const char* path = SDL_getenv("ARCANUM_FLIP_TRACE");
+            if (path != NULL) trace = fopen(path, "w");
+        }
+        if (trace != NULL) fprintf(trace, "%llu\n", (unsigned long long)SDL_GetTicksNS());
+    }
 
     return TIG_OK;
 }
