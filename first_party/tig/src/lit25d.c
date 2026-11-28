@@ -703,6 +703,23 @@ void tig_lit25d_hd_apply(uint32_t* frame, int pitch_px, int w, int h, int scale,
     if (!lit_hd_atlas_ready()) {
         return;
     }
+    // Nothing to do when no floor pixel in view has an HD tile.
+    if (lit_frame.gbuf != NULL) {
+        bool any = false;
+        for (int y = 0; y < lit_frame.height && !any; y += 3) {
+            const uint32_t* g = lit_frame.gbuf + (size_t)y * (size_t)lit_frame.gbuf_pitch;
+            for (int x = 0; x < lit_frame.width; x += 3) {
+                uint32_t c = g[x];
+                if (((c >> 16) & 15u) == 0u && (c & 0xFFFFu) != 0u) {
+                    any = true;
+                    break;
+                }
+            }
+        }
+        if (!any) {
+            return;
+        }
+    }
 
     if (w != lit_hd_w || h != lit_hd_h) {
         if (lit_up_tex != NULL) SDL_ReleaseGPUTexture(lit_device, lit_up_tex);
@@ -775,30 +792,41 @@ void tig_lit25d_hd_apply(uint32_t* frame, int pitch_px, int w, int h, int scale,
         return;
     }
 
-    // Keep the interface: remember what is under the keep rects, write the
-    // whole frame, then put those pixels back.
+    // Keep the interface: copy each row in spans that avoid the keep rects
+    // (a per-pixel rect test here cost most of the frame).
     const LitKeepRect* keep = (const LitKeepRect*)keep_rects;
+    int span_x0[16];
+    int span_x1[16];
     for (int y = 0; y < h; y++) {
         uint32_t* row = frame + (size_t)y * (size_t)pitch_px;
         const uint32_t* src = down + (size_t)y * (size_t)w;
         int gy = y / scale;
+        int n = 0;
+        for (int r = 0; r < num_keep_rects && n < 16; r++) {
+            if (gy >= keep[r].y && gy < keep[r].y + keep[r].height) {
+                span_x0[n] = SDL_max(keep[r].x * scale, 0);
+                span_x1[n] = SDL_min((keep[r].x + keep[r].width) * scale, w);
+                n++;
+            }
+        }
         int x = 0;
         while (x < w) {
-            int gx = x / scale;
-            int skip_to = -1;
-            for (int r = 0; r < num_keep_rects; r++) {
-                if (gx >= keep[r].x && gx < keep[r].x + keep[r].width
-                    && gy >= keep[r].y && gy < keep[r].y + keep[r].height) {
-                    skip_to = (keep[r].x + keep[r].width) * scale;
-                    break;
-                }
+            int nx = x;
+            for (int i = 0; i < n; i++) {
+                if (span_x0[i] <= x && x < span_x1[i] && span_x1[i] > nx) nx = span_x1[i];
             }
-            if (skip_to > x) {
-                x = skip_to;
+            if (nx > x) {
+                x = nx;
                 continue;
             }
-            row[x] = src[x] | 0xFF000000u;
-            x++;
+            int end = w;
+            for (int i = 0; i < n; i++) {
+                if (span_x0[i] > x && span_x0[i] < end) end = span_x0[i];
+            }
+            for (int i = x; i < end; i++) {
+                row[i] = src[i] | 0xFF000000u;
+            }
+            x = end;
         }
     }
     SDL_UnmapGPUTransferBuffer(lit_device, lit_hd_downbuf);
