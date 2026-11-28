@@ -11,6 +11,8 @@ void lit25d_exit(void);
 void lit25d_resize(tig_window_handle_t iso_window_handle);
 bool lit25d_active(void);
 void lit25d_cycle_mode(void);
+bool lit25d_enabled(void);
+void lit25d_set_enabled(bool enabled);
 void lit25d_clear(const TigRect* rect);
 void lit25d_scroll(int dx, int dy);
 void lit25d_blit(const TigArtBlitInfo* blit_info, int anchor_y, int cls);

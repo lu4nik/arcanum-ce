@@ -3,6 +3,7 @@
 #include <tig/lit25d.h>
 
 #include "game/gamelib.h"
+#include "game/highres_config.h"
 #include "game/light.h"
 #include "game/location.h"
 #include "game/object.h"
@@ -90,9 +91,13 @@ bool lit25d_init(tig_window_handle_t iso_window_handle)
 
     tig_lit25d_set_provider(lit25d_provide);
 
+    // HighRes/config.ini "Lighting" (the video options), unless overridden by
+    // ARCANUM_LIT25D (2 = G-buffer view).
     env = SDL_getenv("ARCANUM_LIT25D");
     if (env != NULL) {
         tig_lit25d_set_mode(SDL_atoi(env) % 3);
+    } else {
+        tig_lit25d_set_mode(highres_config_get()->lighting ? 1 : 0);
     }
 
     return true;
@@ -116,14 +121,28 @@ bool lit25d_active(void)
     return lit25d_gbuf != NULL && tig_lit25d_mode() != 0;
 }
 
+bool lit25d_enabled(void)
+{
+    return tig_lit25d_mode() != 0;
+}
+
+void lit25d_set_enabled(bool enabled)
+{
+    if (enabled == lit25d_enabled()) {
+        return;
+    }
+    lit25d_cycle_mode();
+}
+
 void lit25d_cycle_mode(void)
 {
     static const char* names[] = { "off", "on", "G-buffer view" };
-    // Shift+F9 toggles off/on; the G-buffer view stays reachable only through
-    // ARCANUM_LIT25D=2.
+    // Shift+F9 toggles off/on (and remembers it, like the video option); the
+    // G-buffer view stays reachable only through ARCANUM_LIT25D=2.
     int mode = tig_lit25d_mode() != 0 ? 0 : 1;
 
     tig_lit25d_set_mode(mode);
+    highres_config_save_int("Lighting", mode);
     tig_debug_printf("Lit25d: %s\n", names[mode]);
     lit25d_margin_dirty = true;
 

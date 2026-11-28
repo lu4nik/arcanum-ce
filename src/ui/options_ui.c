@@ -4,6 +4,7 @@
 #include "game/combat.h"
 #include "game/gamelib.h"
 #include "game/highres_config.h"
+#include "game/lit25d.h"
 #include "game/location.h"
 #include "game/mes.h"
 #include "game/obj.h"
@@ -67,6 +68,8 @@ static void options_ui_scale_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_scale_set(int value);
 static void options_ui_smooth_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_smooth_set(int value);
+static void options_ui_lighting_get(int* value_ptr, bool* enabled_ptr);
+static void options_ui_lighting_set(int value);
 static void options_ui_video_arrays_build(void);
 static void options_ui_effects_volume_get(int* value_ptr, bool* enabled_ptr);
 static void options_ui_effects_volume_set(int value);
@@ -140,7 +143,9 @@ static OptionsUiControlInfo options_ui_tab_controls_meta[OPTIONS_UI_TAB_COUNT][M
         // options_ui_start.
         { true, CYCLIC_UI_CONTROL_TEXT_ARRAY, 0, "Scale", "", options_ui_scale_get, options_ui_scale_set },
         { true, CYCLIC_UI_CONTROL_TEXT_ARRAY, 0, "Smoothing", "", options_ui_smooth_get, options_ui_smooth_set },
-        { false, 0, 0, "", "", NULL, NULL },
+        // Local experiment: "2.5D Lighting" (options_ui.mes 209), same as
+        // Shift+F9, off by default.
+        { true, CYCLIC_UI_CONTROL_MESSAGE_FILE, 0, "2.5D Lighting", "mes\\OptionsOffOn.mes", options_ui_lighting_get, options_ui_lighting_set },
     },
     {
         { true, CYCLIC_UI_CONTROL_NUMERIC_BAR, 0, "Effects", "", options_ui_effects_volume_get, options_ui_effects_volume_set },
@@ -936,6 +941,17 @@ void options_ui_smooth_set(int value)
 
     tig_video_set_smooth(options_ui_smooth_mode[value]);
     highres_config_save_int("Smooth", options_ui_smooth_mode[value]);
+}
+
+void options_ui_lighting_get(int* value_ptr, bool* enabled_ptr)
+{
+    *value_ptr = lit25d_enabled() ? 1 : 0;
+    *enabled_ptr = true;
+}
+
+void options_ui_lighting_set(int value)
+{
+    lit25d_set_enabled(value != 0);
 }
 
 // Window coordinates; OptionsBase.ART starts 41 px below the window top

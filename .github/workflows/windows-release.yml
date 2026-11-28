@@ -39,6 +39,14 @@ jobs:
             "$fxc" -nologo -T "$t" -E main -Fo "$RUNNER_TEMP/scalefx.dxbc" "$f"
           done
 
+      - name: Validate lighting HLSL
+        run: |
+          fxc=$(ls -d "/c/Program Files (x86)/Windows Kits/10/bin/"10.*/x64/fxc.exe | sort -V | tail -1)
+          for f in first_party/tig/shaders/lit25d/hlsl/*.hlsl; do
+            case "$f" in *.vert.hlsl) t=vs_5_1 ;; *) t=ps_5_1 ;; esac
+            "$fxc" -nologo -T "$t" -E main -Fo "$RUNNER_TEMP/lit25d.dxbc" "$f"
+          done
+
       - name: Package
         run: |
           name="arcanum-ce-windows-x86-${GITHUB_REF_NAME}"

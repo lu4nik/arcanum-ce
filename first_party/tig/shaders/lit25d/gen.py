@@ -48,6 +48,9 @@ def main():
             hlsl = run("spirv-cross", spv, "--hlsl", "--shader-model", "51")
             parts.append("static const char %s_msl[] =\n%s;\n" % (name, c_string(msl)))
             parts.append("static const char %s_hlsl[] =\n%s;\n" % (name, c_string(hlsl)))
+            # Plain copies for the Windows CI, which checks them with fxc.
+            os.makedirs(os.path.join(HERE, "hlsl"), exist_ok=True)
+            open(os.path.join(HERE, "hlsl", name + "." + stage + ".hlsl"), "w").write(hlsl)
             print(name, "ok")
     open(OUT, "w").write("\n".join(parts))
 
