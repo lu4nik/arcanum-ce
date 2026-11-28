@@ -76,6 +76,12 @@ static SDL_GPUTexture* lit_geo_tex;
 static SDL_GPUTransferBuffer* lit_color_up;
 static SDL_GPUTransferBuffer* lit_gbuf_up;
 static SDL_GPUTransferBuffer* lit_down;
+// Lit frames are read back one frame late so the CPU never waits for the
+// GPU: frame N is submitted, frame N-1 (already finished) is shown.
+static SDL_GPUTransferBuffer* lit_down2;
+static SDL_GPUFence* lit_fence[2];
+static int lit_slot;
+static bool lit_async = true;
 static int lit_w;
 static int lit_h;
 static int lit_gw;
@@ -201,7 +207,7 @@ static void lit_release(void)
             *textures[i] = NULL;
         }
     }
-    SDL_GPUTransferBuffer** buffers[] = { &lit_color_up, &lit_gbuf_up, &lit_down };
+    SDL_GPUTransferBuffer** buffers[] = { &lit_color_up, &lit_gbuf_up, &lit_down, &lit_down2 };
     for (size_t i = 0; i < SDL_arraysize(buffers); i++) {
         if (*buffers[i] != NULL) {
             SDL_ReleaseGPUTransferBuffer(lit_device, *buffers[i]);
@@ -312,10 +318,19 @@ static bool lit_targets(int w, int h, int gw, int gh)
         if (lit_out_tex != NULL) SDL_ReleaseGPUTexture(lit_device, lit_out_tex);
         if (lit_color_up != NULL) SDL_ReleaseGPUTransferBuffer(lit_device, lit_color_up);
         if (lit_down != NULL) SDL_ReleaseGPUTransferBuffer(lit_device, lit_down);
+        if (lit_down2 != NULL) SDL_ReleaseGPUTransferBuffer(lit_device, lit_down2);
+        for (int i = 0; i < 2; i++) {
+            if (lit_fence[i] != NULL) {
+                SDL_WaitForGPUFences(lit_device, true, &lit_fence[i], 1);
+                SDL_ReleaseGPUFence(lit_device, lit_fence[i]);
+                lit_fence[i] = NULL;
+            }
+        }
         lit_color_tex = lit_texture(SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM, w, h, false);
         lit_out_tex = lit_texture(SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM, w, h, true);
         lit_color_up = lit_transfer(SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD, w * h * 4);
         lit_down = lit_transfer(SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD, w * h * 4);
+        lit_down2 = lit_transfer(SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD, w * h * 4);
         lit_w = w;
         lit_h = h;
     }
@@ -329,7 +344,7 @@ static bool lit_targets(int w, int h, int gw, int gh)
         lit_gw = gw;
         lit_gh = gh;
     }
-    if (lit_color_tex == NULL || lit_out_tex == NULL || lit_color_up == NULL || lit_down == NULL
+    if (lit_color_tex == NULL || lit_out_tex == NULL || lit_color_up == NULL || lit_down == NULL || lit_down2 == NULL
         || lit_gbuf_tex == NULL || lit_geo_tex == NULL || lit_gbuf_up == NULL) {
         SDL_Log("Lit25d: targets: %s", SDL_GetError());
         lit_release();
@@ -441,6 +456,7 @@ static void lit_fill_uniforms(void)
     u->iparams[0] = lit_frame.origin_y;
     u->iparams[1] = lit_mode;
     u->iparams[2] = n;
+    { const char* e = SDL_getenv("ARCANUM_LIT25D_SKIP"); u->iparams[3] = e ? SDL_atoi(e) : 0; }
     u->hd[0] = (float)lit_frame.tile_x;
     u->hd[1] = (float)lit_frame.tile_y;
     u->hd[2] = 3.0f;
@@ -477,6 +493,11 @@ bool tig_lit25d_apply(const uint32_t* src, int src_pitch_px, int w, int h, uint3
     if (!lit_targets(w, h, lit_frame.width, lit_frame.height)) {
         return false;
     }
+    static int bench = -1;
+    static Uint64 b_cpu, b_wait, b_copy;
+    static int b_n;
+    if (bench < 0) bench = SDL_getenv("ARCANUM_FLIP_BENCH") != NULL;
+    Uint64 t0 = SDL_GetTicksNS();
 
     lit_place_lamps(src, src_pitch_px, w, h);
     lit_fill_uniforms();
@@ -537,7 +558,7 @@ bool tig_lit25d_apply(const uint32_t* src, int src_pitch_px, int w, int h, uint3
         region.h = (Uint32)h;
         region.d = 1;
         SDL_zero(dst_info);
-        dst_info.transfer_buffer = lit_down;
+        dst_info.transfer_buffer = lit_slot == 0 ? lit_down : lit_down2;
         dst_info.pixels_per_row = (Uint32)w;
         dst_info.rows_per_layer = (Uint32)h;
         SDL_DownloadFromGPUTexture(copy, &region, &dst_info);
@@ -548,17 +569,50 @@ bool tig_lit25d_apply(const uint32_t* src, int src_pitch_px, int w, int h, uint3
     if (fence == NULL) {
         return false;
     }
-    SDL_WaitForGPUFences(lit_device, true, &fence, 1);
-    SDL_ReleaseGPUFence(lit_device, fence);
+    Uint64 t1 = SDL_GetTicksNS();
+    int cur = lit_slot;
+    int prev = 1 - cur;
+    lit_fence[cur] = fence;
+    lit_slot = prev;
+    // Show the previous frame; the very first one has nothing to show yet
+    // (the caller presents the unlit frame once). ARCANUM_LIT25D_SYNC=1
+    // waits for this frame instead.
+    static int sync_env = -1;
+    if (sync_env < 0) {
+        sync_env = SDL_getenv("ARCANUM_LIT25D_SYNC") != NULL;
+        lit_async = !sync_env;
+    }
+    int show = cur;
+    if (lit_async) {
+        if (lit_fence[prev] == NULL) {
+            return false;
+        }
+        show = prev;
+    }
+    SDL_WaitForGPUFences(lit_device, true, &lit_fence[show], 1);
+    SDL_ReleaseGPUFence(lit_device, lit_fence[show]);
+    lit_fence[show] = NULL;
+    Uint64 t2 = SDL_GetTicksNS();
+    if (bench) {
+        b_cpu += t1 - t0;
+        b_wait += t2 - t1;
+        if (++b_n == 300) {
+            SDL_Log("Lit bench: cpu+upload %.2f ms, gpu wait %.2f ms, lights %d", b_cpu / 3e8, b_wait / 3e8, lit_frame.num_lights);
+            b_cpu = b_wait = 0;
+            b_n = 0;
+        }
+    }
+    (void)b_copy;
 
-    const uint8_t* down = (const uint8_t*)SDL_MapGPUTransferBuffer(lit_device, lit_down, false);
+    SDL_GPUTransferBuffer* tb = show == 0 ? lit_down : lit_down2;
+    const uint8_t* down = (const uint8_t*)SDL_MapGPUTransferBuffer(lit_device, tb, false);
     if (down == NULL) {
         return false;
     }
     for (int y = 0; y < h; y++) {
         memcpy(dst + (size_t)y * (size_t)dst_pitch_px, down + (size_t)y * (size_t)w * 4, (size_t)w * 4);
     }
-    SDL_UnmapGPUTransferBuffer(lit_device, lit_down);
+    SDL_UnmapGPUTransferBuffer(lit_device, tb);
     return true;
 }
 

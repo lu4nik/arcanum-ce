@@ -14,6 +14,7 @@ layout(std140, set = 3, binding = 0) uniform LitUniforms {
 #define u_origin u_iparams.x
 #define u_mode u_iparams.y
 #define u_num_lights u_iparams.z
+#define u_skip u_iparams.w
 #define u_ambient u_params.x
 #define u_sun u_params.y
 #define u_time u_params.z
@@ -47,6 +48,7 @@ float column_base(ivec2 q, float a) {
 }
 void main() {
     ivec2 q = ivec2(gl_FragCoord.xy);
+    if ((u_skip & 16) != 0) { frag = vec4(0.0); return; }
     uint c = code_at(q);
     uint cls = cls_of(c);
     float y = float(q.y);

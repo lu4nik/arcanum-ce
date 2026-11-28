@@ -16,6 +16,7 @@ layout(std140, set = 3, binding = 0) uniform LitUniforms {
 #define u_origin u_iparams.x
 #define u_mode u_iparams.y
 #define u_num_lights u_iparams.z
+#define u_skip u_iparams.w
 #define u_ambient u_params.x
 #define u_sun u_params.y
 #define u_time u_params.z
@@ -94,7 +95,7 @@ void main() {
     vec3 src = texelFetch(u_color, p, 0).rgb;
     ivec2 q = p - u_rect.xy;
     uint code = code_at(q);
-    if (code == NONE) { frag = vec4(src, 1.0); return; }
+    if (code == NONE || (u_skip & 8) != 0) { frag = vec4(src, 1.0); return; }
     // Text and dialog boxes the game draws into the world layer.
     if (cls_of(code) == 15u) { frag = vec4(src, 1.0); return; }
     uint cls = cls_of(code);
@@ -166,7 +167,7 @@ void main() {
         att *= 1.0 + fl * (0.6 * sin(u_time * 6.1 + fi * 1.7) + 0.4 * sin(u_time * 13.7 + fi * 3.9));
         float ndl = max(dot(n, d / max(dist, 1.0)), 0.0) * 0.85 + 0.15;
         vec3 side = normalize(vec3(-d.y, d.x, 0.0) + 1e-4) * 7.0;
-        float sh = 0.5 * (trace(w, mix(w, lw + side * (jn - 0.5) * 2.0, 0.9), code, 16, jn)
+        float sh = (u_skip & 1) != 0 ? 1.0 : 0.5 * (trace(w, mix(w, lw + side * (jn - 0.5) * 2.0, 0.9), code, 16, jn)
             + trace(w, mix(w, lw - side * (jn - 0.5) * 2.0, 0.9), code, 16, fract(jn + 0.5)));
         acc += u_lcol[i].rgb * att * ndl * sh;
         float strength = dot(u_lcol[i].rgb, vec3(0.333));
@@ -194,17 +195,17 @@ void main() {
     m = m / (1.0 + m * 0.7);
     vec3 outc = src * (1.0 + m * 1.5) * (1.0 - 0.45 * min(shade * 1.6, 1.0));
 
-    if (u_sun > 0.0 && cls != 4u && !indoor) {
+    if (u_sun > 0.0 && cls != 4u && !indoor && (u_skip & 2) == 0) {
         vec3 sd = normalize(u_sundir.xyz);
         vec3 t1 = normalize(cross(sd, vec3(0.0, 0.0, 1.0)));
         vec3 t2 = cross(sd, t1);
         float sh = 0.0;
-        for (int k = 0; k < 4; k++) {
-            float ang = (float(k) + jn) * 1.5707963;
+        for (int k = 0; k < 3; k++) {
+            float ang = (float(k) + jn) * 2.0943951;
             vec3 dir = normalize(sd + (t1 * cos(ang) + t2 * sin(ang)) * 0.07);
-            sh += trace(w, w + dir * u_sundir.w, code, 28, fract(jn + float(k) * 0.25));
+            sh += trace(w, w + dir * u_sundir.w, code, 18, fract(jn + float(k) * 0.333));
         }
-        sh *= 0.25;
+        sh *= 0.3333;
         float facing = cls == 0u ? 1.0 : 0.8 + 0.4 * max(dot(n, sd), 0.0);
         // Characters get real modelling from the sun: lit side, shaded side.
         // Characters get real modelling: the sun as a key (often from behind,
@@ -216,7 +217,7 @@ void main() {
         outc *= mix(1.0, facing * mix(0.6, 1.0, sh), u_sun);
     }
 
-    float ao = cls == 4u ? 0.0 : ambient_occlusion(w, code, jn);
+    float ao = (cls == 4u || (u_skip & 4) != 0) ? 0.0 : ambient_occlusion(w, code, jn);
     outc *= 1.0 - 0.38 * ao;
     if (!indoor) outc *= u_grade.xyz;
     outc += glow;
